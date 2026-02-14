@@ -3,7 +3,7 @@ let swRegistration = null;
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker.register('./service-worker.js')
       .then((registration) => {
         console.log('Service Worker registered successfully:', registration.scope);
         swRegistration = registration;
@@ -146,8 +146,8 @@ if (enableNotificationsBtn) {
         // Send a welcome notification using service worker
         await showNotification('PWA Notifications Enabled! 🎉', {
           body: 'You will now receive notifications from this app. Click to test!',
-          icon: '/icon-192x192.png',
-          badge: '/icon-192x192.png',
+          icon: './icon-192x192.png',
+          badge: './icon-192x192.png',
           tag: 'welcome-notification',
           vibrate: [200, 100, 200],
           actions: [
@@ -202,22 +202,22 @@ if (sendNotificationBtn) {
         {
           title: 'Test Notification 📱',
           body: 'This is a test notification from your PWA! Click me to interact.',
-          data: { url: '/' }
+          data: { url: './' }
         },
         {
           title: 'PWA Update 🚀',
           body: 'Check out the new features: Push Notifications & Storage!',
-          data: { url: '/' }
+          data: { url: './' }
         },
         {
           title: 'Reminder 🔔',
           body: 'PWAs can work offline, cache content, and send notifications!',
-          data: { url: '/' }
+          data: { url: './' }
         },
         {
           title: 'Storage Demo 💾',
           body: 'Your data is safely stored locally using IndexedDB!',
-          data: { url: '/' }
+          data: { url: './' }
         }
       ];
 
@@ -226,14 +226,14 @@ if (sendNotificationBtn) {
       try {
         await showNotification(randomNotification.title, {
           body: randomNotification.body,
-          icon: '/icon-192x192.png',
-          badge: '/icon-192x192.png',
+          icon: './icon-192x192.png',
+          badge: './icon-192x192.png',
           tag: 'test-notification-' + Date.now(),
           requireInteraction: false,
           vibrate: [200, 100, 200],
           data: randomNotification.data,
           actions: [
-            { action: 'open', title: 'Open App', icon: '/icon-192x192.png' },
+            { action: 'open', title: 'Open App', icon: './icon-192x192.png' },
             { action: 'dismiss', title: 'Dismiss' }
           ]
         });
