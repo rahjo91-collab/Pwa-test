@@ -293,18 +293,118 @@ button:disabled {
     transform: translateX(5px);
 }
 
-.task-item button {
-    background: #ea4335;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
+.task-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 
-.task-item button:hover {
+.task-text {
+    word-break: break-word;
+}
+
+.task-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.btn-complete-small, .btn-delete-small {
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-complete-small {
+    background: var(--secondary-color);
+    color: white;
+}
+
+.btn-complete-small:hover {
+    background: #2d9249;
+    transform: scale(1.1);
+}
+
+.btn-delete-small {
+    background: #ea4335;
+    color: white;
+}
+
+.btn-delete-small:hover {
     background: #d33828;
+    transform: scale(1.1);
+}
+
+.task-completed {
+    opacity: 0.6;
+    border-left-color: #9e9e9e !important;
+}
+
+.task-completed .task-text {
+    text-decoration: line-through;
+    color: #999;
+}
+
+.completed-label {
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+    font-weight: 600;
+}
+
+.reminder-badge {
+    font-size: 0.8rem;
+    color: #e65100;
+    background: #fff3e0;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    width: fit-content;
+}
+
+.reminder-badge.overdue {
+    color: #c62828;
+    background: #ffebee;
+}
+
+.snooze-options {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.snooze-options select {
+    padding: 6px 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: white;
+}
+
+.snooze-options select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.reminders-label {
+    font-size: 0.85rem;
+    color: #e65100;
+    margin-top: 10px;
+    padding: 6px 10px;
+    background: #fff3e0;
+    border-radius: 6px;
 }
 
 footer {

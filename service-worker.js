@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-app-v5';
+const CACHE_NAME = 'pwa-app-v6';
 const urlsToCache = [
   './',
   './index.html',
@@ -119,36 +119,89 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Helper: send a message to all open app windows
+function postMessageToClients(message) {
+  return clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((clientList) => {
+      clientList.forEach((client) => {
+        client.postMessage(message);
+      });
+      return clientList;
+    });
+}
+
+// Helper: focus or open the app window
+function focusOrOpenApp(clientList, url) {
+  for (const client of clientList) {
+    if (client.url.includes(self.registration.scope) && 'focus' in client) {
+      return client.focus();
+    }
+  }
+  if (clients.openWindow) {
+    return clients.openWindow(url);
+  }
+}
+
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event);
   console.log('Action clicked:', event.action);
 
+  const data = event.notification.data || {};
   event.notification.close();
 
-  // Handle different actions
+  // Handle dismiss/close — just close the notification
   if (event.action === 'dismiss' || event.action === 'close') {
-    // Just close the notification
     return;
   }
 
-  // For 'open', 'explore', or default click - open/focus the app
+  // Handle snooze action — tell the client to reschedule the reminder
+  if (event.action === 'snooze' && data.taskId) {
+    event.waitUntil(
+      postMessageToClients({
+        action: 'snooze',
+        taskId: data.taskId,
+        snoozeMinutes: data.snoozeMinutes || 5
+      }).then((clientList) => {
+        // Show a confirmation notification
+        self.registration.showNotification('Snoozed ⏰', {
+          body: `"${data.taskText || 'Task'}" — reminder in ${data.snoozeMinutes || 5} min`,
+          icon: './icon-192x192.png',
+          badge: './icon-192x192.png',
+          tag: 'snooze-confirm-' + data.taskId,
+          requireInteraction: false
+        });
+        return focusOrOpenApp(clientList, data.url || './');
+      })
+    );
+    return;
+  }
+
+  // Handle complete action — tell the client to mark the task done
+  if (event.action === 'complete' && data.taskId) {
+    event.waitUntil(
+      postMessageToClients({
+        action: 'complete',
+        taskId: data.taskId
+      }).then((clientList) => {
+        self.registration.showNotification('Task Completed ✅', {
+          body: `"${data.taskText || 'Task'}" marked as done`,
+          icon: './icon-192x192.png',
+          badge: './icon-192x192.png',
+          tag: 'complete-confirm-' + data.taskId,
+          requireInteraction: false
+        });
+        return focusOrOpenApp(clientList, data.url || './');
+      })
+    );
+    return;
+  }
+
+  // Default click — open/focus the app
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        const urlToOpen = event.notification.data?.url || './';
-
-        // If the app is already open, focus it
-        for (let client of clientList) {
-          if (client.url.includes(self.registration.scope) && 'focus' in client) {
-            return client.focus();
-          }
-        }
-
-        // Otherwise, open a new window
-        if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
-        }
+        return focusOrOpenApp(clientList, data.url || './');
       })
       .catch((error) => {
         console.error('Error handling notification click:', error);

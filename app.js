@@ -333,20 +333,26 @@ if (clearLocalBtn) {
 }
 
 // ==========================================
-// INDEXEDDB
+// SHARED TODO LIST (IndexedDB + Notifications)
 // ==========================================
 
 const taskInput = document.getElementById('task-input');
+const taskReminder = document.getElementById('task-reminder');
+const snoozeDuration = document.getElementById('snooze-duration');
 const addTaskBtn = document.getElementById('add-task-btn');
 const clearTasksBtn = document.getElementById('clear-tasks-btn');
 const tasksList = document.getElementById('tasks-list');
 const indexedDBResult = document.getElementById('indexeddb-result');
+const activeReminders = document.getElementById('active-reminders');
 
 let db;
 
-// Initialize IndexedDB
+// Track scheduled reminder timeouts so we can cancel them
+const reminderTimers = {};
+
+// Initialize IndexedDB (v2 adds reminderTime + completed fields)
 function initIndexedDB() {
-  const request = indexedDB.open('PWA_Database', 1);
+  const request = indexedDB.open('PWA_Database', 2);
 
   request.onerror = () => {
     console.error('IndexedDB error:', request.error);
@@ -367,27 +373,57 @@ function initIndexedDB() {
       const objectStore = db.createObjectStore('tasks', { keyPath: 'id', autoIncrement: true });
       objectStore.createIndex('text', 'text', { unique: false });
       objectStore.createIndex('timestamp', 'timestamp', { unique: false });
-      console.log('IndexedDB object store created');
+      objectStore.createIndex('reminderTime', 'reminderTime', { unique: false });
+      objectStore.createIndex('completed', 'completed', { unique: false });
+    } else {
+      const objectStore = event.target.transaction.objectStore('tasks');
+      if (!objectStore.indexNames.contains('reminderTime')) {
+        objectStore.createIndex('reminderTime', 'reminderTime', { unique: false });
+      }
+      if (!objectStore.indexNames.contains('completed')) {
+        objectStore.createIndex('completed', 'completed', { unique: false });
+      }
     }
+    console.log('IndexedDB schema upgraded to v2');
   };
 }
 
 // Add task to IndexedDB
-function addTask(text) {
+function addTask(text, reminderTime) {
   const transaction = db.transaction(['tasks'], 'readwrite');
   const objectStore = transaction.objectStore('tasks');
 
   const task = {
     text: text,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    reminderTime: reminderTime || null,
+    completed: false
   };
 
   const request = objectStore.add(task);
 
   request.onsuccess = () => {
-    console.log('Task added to IndexedDB:', task);
+    const taskId = request.result;
+    console.log('Task added to IndexedDB:', { ...task, id: taskId });
     indexedDBResult.textContent = `✅ Task added: "${text}"`;
     indexedDBResult.style.borderColor = '#34a853';
+
+    // Schedule reminder if set
+    if (reminderTime) {
+      scheduleReminder(taskId, text, reminderTime);
+    }
+
+    // Send "task added" notification if permissions granted
+    if (Notification.permission === 'granted') {
+      showNotification('Task Added ✅', {
+        body: text + (reminderTime ? ` (reminder: ${formatTime(reminderTime)})` : ''),
+        icon: './icon-192x192.png',
+        badge: './icon-192x192.png',
+        tag: 'task-added-' + taskId,
+        data: { type: 'task-added', taskId: taskId, url: './' }
+      });
+    }
+
     loadTasks();
   };
 
@@ -395,6 +431,131 @@ function addTask(text) {
     console.error('Error adding task:', request.error);
     indexedDBResult.textContent = '❌ Error adding task';
     indexedDBResult.style.borderColor = '#ea4335';
+  };
+}
+
+// Schedule a reminder notification for a task
+function scheduleReminder(taskId, text, reminderTime) {
+  const delay = new Date(reminderTime).getTime() - Date.now();
+
+  if (delay <= 0) {
+    // Reminder is in the past, fire immediately
+    fireReminderNotification(taskId, text);
+    return;
+  }
+
+  // Cancel existing timer for this task if any
+  if (reminderTimers[taskId]) {
+    clearTimeout(reminderTimers[taskId]);
+  }
+
+  reminderTimers[taskId] = setTimeout(() => {
+    fireReminderNotification(taskId, text);
+    delete reminderTimers[taskId];
+    updateActiveRemindersUI();
+  }, delay);
+
+  console.log(`Reminder scheduled for task ${taskId} in ${Math.round(delay / 1000)}s`);
+  updateActiveRemindersUI();
+}
+
+// Fire the reminder notification with snooze/complete actions
+function fireReminderNotification(taskId, text) {
+  if (Notification.permission !== 'granted') return;
+
+  const snoozeMin = snoozeDuration ? parseInt(snoozeDuration.value) : 5;
+
+  showNotification('Task Reminder ⏰', {
+    body: text,
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
+    tag: 'reminder-' + taskId,
+    requireInteraction: true,
+    vibrate: [300, 100, 300, 100, 300],
+    data: {
+      type: 'reminder',
+      taskId: taskId,
+      taskText: text,
+      snoozeMinutes: snoozeMin,
+      url: './'
+    },
+    actions: [
+      { action: 'snooze', title: 'Snooze ' + snoozeMin + 'min' },
+      { action: 'complete', title: 'Complete' }
+    ]
+  });
+}
+
+// Format a datetime string for display
+function formatTime(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit'
+  });
+}
+
+// Update the active reminders display
+function updateActiveRemindersUI() {
+  if (!activeReminders) return;
+
+  const ids = Object.keys(reminderTimers);
+  if (ids.length === 0) {
+    activeReminders.innerHTML = '';
+    return;
+  }
+
+  activeReminders.innerHTML =
+    '<p class="reminders-label">Active reminders: ' + ids.length + ' pending</p>';
+}
+
+// Mark a task as completed in IndexedDB
+function completeTask(taskId) {
+  const transaction = db.transaction(['tasks'], 'readwrite');
+  const objectStore = transaction.objectStore('tasks');
+  const getReq = objectStore.get(taskId);
+
+  getReq.onsuccess = () => {
+    const task = getReq.result;
+    if (!task) return;
+    task.completed = true;
+    task.reminderTime = null;
+    objectStore.put(task);
+
+    // Cancel any pending reminder
+    if (reminderTimers[taskId]) {
+      clearTimeout(reminderTimers[taskId]);
+      delete reminderTimers[taskId];
+    }
+
+    console.log('Task completed:', taskId);
+    indexedDBResult.textContent = `✅ Task completed: "${task.text}"`;
+    indexedDBResult.style.borderColor = '#34a853';
+    loadTasks();
+    updateActiveRemindersUI();
+  };
+}
+
+// Snooze a task reminder by a number of minutes
+function snoozeTask(taskId, minutes) {
+  const transaction = db.transaction(['tasks'], 'readwrite');
+  const objectStore = transaction.objectStore('tasks');
+  const getReq = objectStore.get(taskId);
+
+  getReq.onsuccess = () => {
+    const task = getReq.result;
+    if (!task) return;
+
+    const newTime = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+    task.reminderTime = newTime;
+    objectStore.put(task);
+
+    scheduleReminder(taskId, task.text, newTime);
+
+    console.log(`Task ${taskId} snoozed for ${minutes} minutes`);
+    indexedDBResult.textContent = `⏰ Snoozed: "${task.text}" — reminder in ${minutes}min`;
+    indexedDBResult.style.borderColor = '#fbbc04';
+    loadTasks();
   };
 }
 
@@ -407,6 +568,17 @@ function loadTasks() {
   request.onsuccess = () => {
     const tasks = request.result;
     displayTasks(tasks);
+
+    // Re-schedule any pending reminders for tasks that still have a future reminderTime
+    tasks.forEach(task => {
+      if (task.reminderTime && !task.completed && !reminderTimers[task.id]) {
+        const delay = new Date(task.reminderTime).getTime() - Date.now();
+        if (delay > 0) {
+          scheduleReminder(task.id, task.text, task.reminderTime);
+        }
+      }
+    });
+    updateActiveRemindersUI();
   };
 
   request.onerror = () => {
@@ -425,10 +597,35 @@ function displayTasks(tasks) {
 
   tasks.forEach(task => {
     const taskElement = document.createElement('div');
-    taskElement.className = 'task-item';
+    taskElement.className = 'task-item' + (task.completed ? ' task-completed' : '');
+
+    let reminderBadge = '';
+    if (task.reminderTime && !task.completed) {
+      const isPast = new Date(task.reminderTime) <= new Date();
+      reminderBadge = `<span class="reminder-badge ${isPast ? 'overdue' : ''}">⏰ ${formatTime(task.reminderTime)}</span>`;
+    }
+
+    let actions = '';
+    if (!task.completed) {
+      actions = `
+        <div class="task-actions">
+          <button class="btn-complete-small" onclick="window.completeTask(${task.id})">✓</button>
+          <button class="btn-delete-small" onclick="window.deleteTask(${task.id})">✕</button>
+        </div>`;
+    } else {
+      actions = `
+        <div class="task-actions">
+          <span class="completed-label">Done</span>
+          <button class="btn-delete-small" onclick="window.deleteTask(${task.id})">✕</button>
+        </div>`;
+    }
+
     taskElement.innerHTML = `
-      <span>${task.text}</span>
-      <button onclick="deleteTask(${task.id})">Delete</button>
+      <div class="task-content">
+        <span class="task-text">${task.text}</span>
+        ${reminderBadge}
+      </div>
+      ${actions}
     `;
     tasksList.appendChild(taskElement);
   });
@@ -441,10 +638,15 @@ window.deleteTask = function(id) {
   const request = objectStore.delete(id);
 
   request.onsuccess = () => {
+    if (reminderTimers[id]) {
+      clearTimeout(reminderTimers[id]);
+      delete reminderTimers[id];
+    }
     console.log('Task deleted:', id);
     indexedDBResult.textContent = '✅ Task deleted';
     indexedDBResult.style.borderColor = '#34a853';
     loadTasks();
+    updateActiveRemindersUI();
   };
 
   request.onerror = () => {
@@ -454,6 +656,11 @@ window.deleteTask = function(id) {
   };
 };
 
+// Expose completeTask to onclick handlers
+window.completeTask = function(id) {
+  completeTask(id);
+};
+
 // Clear all tasks
 function clearAllTasks() {
   const transaction = db.transaction(['tasks'], 'readwrite');
@@ -461,10 +668,17 @@ function clearAllTasks() {
   const request = objectStore.clear();
 
   request.onsuccess = () => {
+    // Cancel all pending reminders
+    Object.keys(reminderTimers).forEach(id => {
+      clearTimeout(reminderTimers[id]);
+      delete reminderTimers[id];
+    });
+
     console.log('All tasks cleared');
     indexedDBResult.textContent = '✅ All tasks cleared';
     indexedDBResult.style.borderColor = '#34a853';
     loadTasks();
+    updateActiveRemindersUI();
   };
 
   request.onerror = () => {
@@ -474,13 +688,15 @@ function clearAllTasks() {
   };
 }
 
-// Event listeners for IndexedDB
+// Event listeners for IndexedDB / Todo List
 if (addTaskBtn) {
   addTaskBtn.addEventListener('click', () => {
     const text = taskInput.value.trim();
     if (text) {
-      addTask(text);
+      const reminder = taskReminder ? taskReminder.value : '';
+      addTask(text, reminder || null);
       taskInput.value = '';
+      if (taskReminder) taskReminder.value = '';
     } else {
       indexedDBResult.textContent = '⚠️ Please enter a task';
       indexedDBResult.style.borderColor = '#fbbc04';
@@ -492,6 +708,20 @@ if (clearTasksBtn) {
   clearTasksBtn.addEventListener('click', () => {
     if (confirm('Are you sure you want to clear all tasks?')) {
       clearAllTasks();
+    }
+  });
+}
+
+// Listen for messages from the service worker (snooze/complete actions)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const { action, taskId, snoozeMinutes } = event.data;
+    console.log('Message from SW:', event.data);
+
+    if (action === 'snooze' && taskId) {
+      snoozeTask(taskId, snoozeMinutes || 5);
+    } else if (action === 'complete' && taskId) {
+      completeTask(taskId);
     }
   });
 }

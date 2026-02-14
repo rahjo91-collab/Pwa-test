@@ -20,7 +20,7 @@
     <div class="container">
         <header>
             <h1>Progressive Web App</h1>
-            <p class="version">v1.4.0</p>
+            <p class="version">v1.5.0</p>
             <p class="subtitle">Your PWA is ready to go!</p>
         </header>
 
@@ -87,14 +87,29 @@
                 </div>
 
                 <div class="storage-demo">
-                    <h4>IndexedDB</h4>
+                    <h4>Shared Todo List</h4>
+                    <div class="info-box">
+                        <p><strong>Reminders:</strong> Set a reminder time and get notified. Snooze or complete tasks directly from the notification!</p>
+                    </div>
                     <div class="input-group">
                         <input type="text" id="task-input" placeholder="Enter a task" value="Test PWA features">
+                        <input type="datetime-local" id="task-reminder" title="Set a reminder time">
                         <button id="add-task-btn" class="btn-primary">Add Task</button>
                         <button id="clear-tasks-btn" class="btn-danger">Clear All</button>
                     </div>
+                    <div class="snooze-options">
+                        <label>Default snooze:</label>
+                        <select id="snooze-duration">
+                            <option value="1">1 minute</option>
+                            <option value="5" selected>5 minutes</option>
+                            <option value="15">15 minutes</option>
+                            <option value="30">30 minutes</option>
+                            <option value="60">1 hour</option>
+                        </select>
+                    </div>
                     <div id="tasks-list"></div>
                     <p id="indexeddb-result" class="result"></p>
+                    <div id="active-reminders"></div>
                 </div>
             </section>
 

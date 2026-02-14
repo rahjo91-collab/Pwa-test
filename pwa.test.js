@@ -171,10 +171,13 @@ describe('HTML/JS element ID consistency', () => {
     'clear-local-btn',
     'local-storage-result',
     'task-input',
+    'task-reminder',
+    'snooze-duration',
     'add-task-btn',
     'clear-tasks-btn',
     'tasks-list',
     'indexeddb-result',
+    'active-reminders',
   ];
 
   const html = readFile('index.html');
@@ -250,5 +253,123 @@ describe('Service worker structure', () => {
 
   it('calls clients.claim in activate', () => {
     assert.ok(sw.includes('clients.claim()'), 'Missing clients.claim() call');
+  });
+});
+
+// ==========================================
+// 8. Notification action handling in service worker
+// ==========================================
+
+describe('Service worker notification actions', () => {
+  const sw = readFile('service-worker.js');
+
+  it('handles snooze action in notificationclick', () => {
+    assert.ok(
+      sw.includes("event.action === 'snooze'"),
+      'Missing snooze action handler in notificationclick'
+    );
+  });
+
+  it('handles complete action in notificationclick', () => {
+    assert.ok(
+      sw.includes("event.action === 'complete'"),
+      'Missing complete action handler in notificationclick'
+    );
+  });
+
+  it('posts messages to clients via postMessage', () => {
+    assert.ok(
+      sw.includes('client.postMessage('),
+      'Service worker should use postMessage to communicate with clients'
+    );
+  });
+
+  it('sends snooze confirmation notification', () => {
+    assert.ok(
+      sw.includes("'Snoozed") || sw.includes("Snoozed"),
+      'Should show a snooze confirmation notification'
+    );
+  });
+
+  it('sends complete confirmation notification', () => {
+    assert.ok(
+      sw.includes("'Task Completed") || sw.includes("Task Completed"),
+      'Should show a completion confirmation notification'
+    );
+  });
+});
+
+// ==========================================
+// 9. Shared todo list features in app.js
+// ==========================================
+
+describe('Shared todo list features', () => {
+  const appJs = readFile('app.js');
+
+  it('initializes IndexedDB v2 with reminder fields', () => {
+    assert.ok(
+      appJs.includes("indexedDB.open('PWA_Database', 2)"),
+      'Should open IndexedDB version 2'
+    );
+  });
+
+  it('creates reminderTime index', () => {
+    assert.ok(
+      appJs.includes("'reminderTime'"),
+      'Should create a reminderTime index'
+    );
+  });
+
+  it('creates completed index', () => {
+    assert.ok(
+      appJs.includes("'completed'"),
+      'Should create a completed index'
+    );
+  });
+
+  it('has scheduleReminder function', () => {
+    assert.ok(
+      appJs.includes('function scheduleReminder('),
+      'Should have a scheduleReminder function'
+    );
+  });
+
+  it('has fireReminderNotification function', () => {
+    assert.ok(
+      appJs.includes('function fireReminderNotification('),
+      'Should have a fireReminderNotification function'
+    );
+  });
+
+  it('has snoozeTask function', () => {
+    assert.ok(
+      appJs.includes('function snoozeTask('),
+      'Should have a snoozeTask function'
+    );
+  });
+
+  it('has completeTask function', () => {
+    assert.ok(
+      appJs.includes('function completeTask('),
+      'Should have a completeTask function'
+    );
+  });
+
+  it('listens for service worker messages', () => {
+    assert.ok(
+      appJs.includes("addEventListener('message'"),
+      'Should listen for messages from the service worker'
+    );
+  });
+
+  it('reminder notifications include snooze and complete actions', () => {
+    assert.ok(
+      appJs.includes("action: 'snooze'"),
+      'Reminder notifications should include a snooze action'
+    );
+    assert.ok(
+      appJs.includes("action: 'complete'"),
+      'Reminder notifications should include a complete action'
+    );
   });
 });
