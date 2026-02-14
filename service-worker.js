@@ -1,12 +1,12 @@
-const CACHE_NAME = 'pwa-app-v4';
+const CACHE_NAME = 'pwa-app-v5';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  './',
+  './index.html',
+  './styles.css',
+  './app.js',
+  './manifest.json',
+  './icon-192x192.png',
+  './icon-512x512.png'
 ];
 
 // Install event - cache resources
@@ -85,8 +85,8 @@ self.addEventListener('push', (event) => {
   let notificationData = {
     title: 'PWA Notification',
     body: 'You have a new notification!',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
     tag: 'pwa-notification',
     requireInteraction: false
   };
@@ -136,7 +136,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        const urlToOpen = event.notification.data?.url || '/';
+        const urlToOpen = event.notification.data?.url || './';
 
         // If the app is already open, focus it
         for (let client of clientList) {
