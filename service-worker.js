@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-app-v2';
+const CACHE_NAME = 'pwa-app-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -123,25 +123,36 @@ self.addEventListener('push', (event) => {
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification clicked:', event);
+  console.log('Action clicked:', event.action);
 
   event.notification.close();
 
-  // Handle notification click - open the app or a specific URL
+  // Handle different actions
+  if (event.action === 'dismiss' || event.action === 'close') {
+    // Just close the notification
+    return;
+  }
+
+  // For 'open', 'explore', or default click - open/focus the app
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
+        const urlToOpen = event.notification.data?.url || '/';
+
         // If the app is already open, focus it
         for (let client of clientList) {
-          if (client.url === self.registration.scope && 'focus' in client) {
+          if (client.url.includes(self.registration.scope) && 'focus' in client) {
             return client.focus();
           }
         }
 
         // Otherwise, open a new window
         if (clients.openWindow) {
-          const urlToOpen = event.notification.data?.url || '/';
           return clients.openWindow(urlToOpen);
         }
+      })
+      .catch((error) => {
+        console.error('Error handling notification click:', error);
       })
   );
 });

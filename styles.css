@@ -152,12 +152,27 @@ main {
     font-size: 1.2rem;
 }
 
+.info-box {
+    background: #e3f2fd;
+    border-left: 4px solid var(--primary-color);
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.info-box p {
+    margin: 0;
+    color: #1565c0;
+}
+
 #notification-status {
     padding: 10px;
     margin-bottom: 15px;
     background: #f0f0f0;
     border-radius: 6px;
     font-weight: 500;
+    transition: background 0.3s ease;
 }
 
 /* Button Styles */

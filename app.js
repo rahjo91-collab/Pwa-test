@@ -1,10 +1,16 @@
 // Register Service Worker
+let swRegistration = null;
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
       .then((registration) => {
         console.log('Service Worker registered successfully:', registration.scope);
+        swRegistration = registration;
         updateServiceWorkerStatus('Service Worker: Active ✓');
+
+        // Check notification status after service worker is ready
+        updateNotificationStatus();
       })
       .catch((error) => {
         console.log('Service Worker registration failed:', error);
@@ -112,12 +118,17 @@ if (enableNotificationsBtn) {
       updateNotificationStatus();
 
       if (permission === 'granted') {
-        // Send a welcome notification
-        new Notification('PWA Notifications Enabled! 🎉', {
-          body: 'You will now receive notifications from this app',
+        // Send a welcome notification using service worker
+        await showNotification('PWA Notifications Enabled! 🎉', {
+          body: 'You will now receive notifications from this app. Click to test!',
           icon: '/icon-192x192.png',
           badge: '/icon-192x192.png',
-          tag: 'welcome-notification'
+          tag: 'welcome-notification',
+          vibrate: [200, 100, 200],
+          actions: [
+            { action: 'explore', title: 'Explore App' },
+            { action: 'close', title: 'Close' }
+          ]
         });
       }
     } catch (error) {
@@ -127,33 +138,95 @@ if (enableNotificationsBtn) {
   });
 }
 
+// Helper function to show notification (uses service worker when available)
+async function showNotification(title, options) {
+  try {
+    if (swRegistration && swRegistration.active) {
+      // Use service worker to show notification (more reliable and persistent)
+      await swRegistration.showNotification(title, options);
+      console.log('Notification shown via Service Worker');
+    } else {
+      // Fallback to regular Notification API
+      const notification = new Notification(title, options);
+
+      // Add click handler for regular notifications
+      notification.onclick = function(event) {
+        event.preventDefault();
+        console.log('Notification clicked:', title);
+        window.focus();
+        notification.close();
+      };
+
+      console.log('Notification shown via Notification API');
+    }
+  } catch (error) {
+    console.error('Error showing notification:', error);
+    throw error;
+  }
+}
+
 // Send test notification
 if (sendNotificationBtn) {
-  sendNotificationBtn.addEventListener('click', () => {
+  sendNotificationBtn.addEventListener('click', async () => {
     if (Notification.permission === 'granted') {
       const notifications = [
-        { title: 'Test Notification 📱', body: 'This is a test notification from your PWA!' },
-        { title: 'PWA Update 🚀', body: 'Check out the new features in your app!' },
-        { title: 'Reminder 🔔', body: 'PWAs can work offline and send notifications!' }
+        {
+          title: 'Test Notification 📱',
+          body: 'This is a test notification from your PWA! Click me to interact.',
+          data: { url: '/' }
+        },
+        {
+          title: 'PWA Update 🚀',
+          body: 'Check out the new features: Push Notifications & Storage!',
+          data: { url: '/' }
+        },
+        {
+          title: 'Reminder 🔔',
+          body: 'PWAs can work offline, cache content, and send notifications!',
+          data: { url: '/' }
+        },
+        {
+          title: 'Storage Demo 💾',
+          body: 'Your data is safely stored locally using IndexedDB!',
+          data: { url: '/' }
+        }
       ];
 
       const randomNotification = notifications[Math.floor(Math.random() * notifications.length)];
 
-      new Notification(randomNotification.title, {
-        body: randomNotification.body,
-        icon: '/icon-192x192.png',
-        badge: '/icon-192x192.png',
-        tag: 'test-notification',
-        requireInteraction: false
-      });
+      try {
+        await showNotification(randomNotification.title, {
+          body: randomNotification.body,
+          icon: '/icon-192x192.png',
+          badge: '/icon-192x192.png',
+          tag: 'test-notification-' + Date.now(),
+          requireInteraction: false,
+          vibrate: [200, 100, 200],
+          data: randomNotification.data,
+          actions: [
+            { action: 'open', title: 'Open App', icon: '/icon-192x192.png' },
+            { action: 'dismiss', title: 'Dismiss' }
+          ]
+        });
 
-      console.log('Test notification sent');
+        // Update status
+        notificationStatus.textContent = '✅ Test notification sent! Check your system tray.';
+        notificationStatus.style.background = '#e8f5e9';
+
+        setTimeout(() => {
+          notificationStatus.textContent = '✅ Notifications enabled';
+          notificationStatus.style.background = '#f0f0f0';
+        }, 3000);
+
+        console.log('Test notification sent successfully');
+      } catch (error) {
+        console.error('Error sending test notification:', error);
+        notificationStatus.textContent = '❌ Error sending notification';
+        notificationStatus.style.background = '#ffebee';
+      }
     }
   });
 }
-
-// Initialize notification status
-updateNotificationStatus();
 
 // ==========================================
 // LOCAL STORAGE
