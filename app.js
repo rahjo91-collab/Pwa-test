@@ -112,10 +112,35 @@ function updateNotificationStatus() {
 // Request notification permission
 if (enableNotificationsBtn) {
   enableNotificationsBtn.addEventListener('click', async () => {
+    // Check for secure context (HTTPS or localhost) - required for notifications
+    if (window.isSecureContext === false) {
+      notificationStatus.textContent = '❌ Notifications require HTTPS. Use localhost or deploy to HTTPS.';
+      notificationStatus.style.background = '#ffebee';
+      return;
+    }
+
+    // Check if Notification API is available
+    if (!('Notification' in window)) {
+      notificationStatus.textContent = '❌ Notifications not supported in this browser';
+      enableNotificationsBtn.disabled = true;
+      return;
+    }
+
+    // Give immediate visual feedback
+    enableNotificationsBtn.disabled = true;
+    enableNotificationsBtn.textContent = 'Requesting Permission...';
+    notificationStatus.textContent = '⏳ Waiting for permission...';
+
     try {
       const permission = await Notification.requestPermission();
       console.log('Notification permission:', permission);
       updateNotificationStatus();
+
+      // Restore button if permission wasn't granted
+      if (permission !== 'granted') {
+        enableNotificationsBtn.disabled = false;
+        enableNotificationsBtn.textContent = 'Enable Notifications';
+      }
 
       if (permission === 'granted') {
         // Send a welcome notification using service worker
@@ -133,7 +158,10 @@ if (enableNotificationsBtn) {
       }
     } catch (error) {
       console.error('Error requesting notification permission:', error);
-      notificationStatus.textContent = '❌ Error enabling notifications';
+      notificationStatus.textContent = '❌ Error enabling notifications: ' + error.message;
+      notificationStatus.style.background = '#ffebee';
+      enableNotificationsBtn.disabled = false;
+      enableNotificationsBtn.textContent = 'Enable Notifications';
     }
   });
 }
