@@ -28,6 +28,7 @@ describe('File existence', () => {
     'manifest.json',
     'icon-192x192.png',
     'icon-512x512.png',
+    'version.json',
   ];
 
   for (const file of expectedFiles) {
@@ -132,6 +133,39 @@ describe('manifest.json', () => {
 });
 
 // ==========================================
+// 3b. version.json validation
+// ==========================================
+
+describe('version.json', () => {
+  let version;
+
+  it('is valid JSON', () => {
+    version = JSON.parse(readFile('version.json'));
+  });
+
+  it('has build number', () => {
+    assert.equal(typeof version.build, 'number', '"build" should be a number');
+    assert.ok(version.build > 0, '"build" should be > 0');
+  });
+
+  it('has short commit hash', () => {
+    assert.ok(version.hash, 'Missing "hash"');
+    assert.ok(/^[0-9a-f]{7,}$/.test(version.hash), `"hash" should be a hex string, got "${version.hash}"`);
+  });
+
+  it('has ISO date', () => {
+    assert.ok(version.date, 'Missing "date"');
+    assert.ok(!isNaN(Date.parse(version.date)), `"date" should be a valid ISO date, got "${version.date}"`);
+  });
+
+  it('has a display label', () => {
+    assert.ok(version.label, 'Missing "label"');
+    assert.ok(version.label.includes(String(version.build)), 'label should contain the build number');
+    assert.ok(version.label.includes(version.hash), 'label should contain the hash');
+  });
+});
+
+// ==========================================
 // 4. Service worker cache matches real files
 // ==========================================
 
@@ -159,6 +193,7 @@ describe('Service worker cache list', () => {
 describe('HTML/JS element ID consistency', () => {
   // IDs that app.js references via getElementById
   const expectedIds = [
+    'app-version',
     'sw-status',
     'install-btn',
     'notification-status',

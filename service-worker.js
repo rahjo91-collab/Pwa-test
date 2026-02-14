@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-app-v6';
+const CACHE_NAME = 'pwa-app-v7';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,7 +6,8 @@ const urlsToCache = [
   './app.js',
   './manifest.json',
   './icon-192x192.png',
-  './icon-512x512.png'
+  './icon-512x512.png',
+  './version.json'
 ];
 
 // Install event - cache resources
