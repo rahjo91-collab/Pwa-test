@@ -5,7 +5,7 @@
   "main": "index.html",
   "scripts": {
     "start": "npx serve -s . -l 3000",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test pwa.test.js"
   },
   "keywords": [
     "pwa",
