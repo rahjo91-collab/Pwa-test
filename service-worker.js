@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-app-v1';
+const CACHE_NAME = 'pwa-app-v2';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -75,6 +75,73 @@ self.addEventListener('fetch', (event) => {
           console.log('Service Worker: Fetch failed', error);
           // You can return a custom offline page here
         });
+      })
+  );
+});
+
+// Push notification event
+self.addEventListener('push', (event) => {
+  console.log('Push notification received:', event);
+
+  let notificationData = {
+    title: 'PWA Notification',
+    body: 'You have a new notification!',
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: 'pwa-notification',
+    requireInteraction: false
+  };
+
+  // If push event has data, use it
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      notificationData = {
+        title: data.title || notificationData.title,
+        body: data.body || notificationData.body,
+        icon: data.icon || notificationData.icon,
+        badge: data.badge || notificationData.badge,
+        tag: data.tag || notificationData.tag,
+        data: data.url ? { url: data.url } : {}
+      };
+    } catch (e) {
+      console.error('Error parsing push data:', e);
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      data: notificationData.data
+    })
+  );
+});
+
+// Notification click event
+self.addEventListener('notificationclick', (event) => {
+  console.log('Notification clicked:', event);
+
+  event.notification.close();
+
+  // Handle notification click - open the app or a specific URL
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // If the app is already open, focus it
+        for (let client of clientList) {
+          if (client.url === self.registration.scope && 'focus' in client) {
+            return client.focus();
+          }
+        }
+
+        // Otherwise, open a new window
+        if (clients.openWindow) {
+          const urlToOpen = event.notification.data?.url || '/';
+          return clients.openWindow(urlToOpen);
+        }
       })
   );
 });

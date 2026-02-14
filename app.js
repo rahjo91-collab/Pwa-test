@@ -72,3 +72,334 @@ if (window.matchMedia('(display-mode: standalone)').matches) {
     installBtn.style.display = 'none';
   }
 }
+
+// ==========================================
+// PUSH NOTIFICATIONS
+// ==========================================
+
+const notificationStatus = document.getElementById('notification-status');
+const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+const sendNotificationBtn = document.getElementById('send-notification-btn');
+
+// Check notification permission status
+function updateNotificationStatus() {
+  if (!('Notification' in window)) {
+    notificationStatus.textContent = '❌ Notifications not supported in this browser';
+    enableNotificationsBtn.disabled = true;
+    return;
+  }
+
+  const permission = Notification.permission;
+  if (permission === 'granted') {
+    notificationStatus.textContent = '✅ Notifications enabled';
+    enableNotificationsBtn.style.display = 'none';
+    sendNotificationBtn.disabled = false;
+  } else if (permission === 'denied') {
+    notificationStatus.textContent = '❌ Notifications blocked. Enable in browser settings.';
+    enableNotificationsBtn.disabled = true;
+  } else {
+    notificationStatus.textContent = '⚠️ Notifications not enabled';
+    enableNotificationsBtn.disabled = false;
+  }
+}
+
+// Request notification permission
+if (enableNotificationsBtn) {
+  enableNotificationsBtn.addEventListener('click', async () => {
+    try {
+      const permission = await Notification.requestPermission();
+      console.log('Notification permission:', permission);
+      updateNotificationStatus();
+
+      if (permission === 'granted') {
+        // Send a welcome notification
+        new Notification('PWA Notifications Enabled! 🎉', {
+          body: 'You will now receive notifications from this app',
+          icon: '/icon-192x192.png',
+          badge: '/icon-192x192.png',
+          tag: 'welcome-notification'
+        });
+      }
+    } catch (error) {
+      console.error('Error requesting notification permission:', error);
+      notificationStatus.textContent = '❌ Error enabling notifications';
+    }
+  });
+}
+
+// Send test notification
+if (sendNotificationBtn) {
+  sendNotificationBtn.addEventListener('click', () => {
+    if (Notification.permission === 'granted') {
+      const notifications = [
+        { title: 'Test Notification 📱', body: 'This is a test notification from your PWA!' },
+        { title: 'PWA Update 🚀', body: 'Check out the new features in your app!' },
+        { title: 'Reminder 🔔', body: 'PWAs can work offline and send notifications!' }
+      ];
+
+      const randomNotification = notifications[Math.floor(Math.random() * notifications.length)];
+
+      new Notification(randomNotification.title, {
+        body: randomNotification.body,
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png',
+        tag: 'test-notification',
+        requireInteraction: false
+      });
+
+      console.log('Test notification sent');
+    }
+  });
+}
+
+// Initialize notification status
+updateNotificationStatus();
+
+// ==========================================
+// LOCAL STORAGE
+// ==========================================
+
+const storageKey = document.getElementById('storage-key');
+const storageValue = document.getElementById('storage-value');
+const saveLocalBtn = document.getElementById('save-local-btn');
+const loadLocalBtn = document.getElementById('load-local-btn');
+const clearLocalBtn = document.getElementById('clear-local-btn');
+const localStorageResult = document.getElementById('local-storage-result');
+
+// Save to localStorage
+if (saveLocalBtn) {
+  saveLocalBtn.addEventListener('click', () => {
+    const key = storageKey.value.trim();
+    const value = storageValue.value.trim();
+
+    if (key && value) {
+      try {
+        localStorage.setItem(key, value);
+        localStorageResult.textContent = `✅ Saved: ${key} = "${value}"`;
+        localStorageResult.style.borderColor = '#34a853';
+        console.log('Saved to localStorage:', { key, value });
+      } catch (error) {
+        localStorageResult.textContent = `❌ Error: ${error.message}`;
+        localStorageResult.style.borderColor = '#ea4335';
+      }
+    } else {
+      localStorageResult.textContent = '⚠️ Please enter both key and value';
+      localStorageResult.style.borderColor = '#fbbc04';
+    }
+  });
+}
+
+// Load from localStorage
+if (loadLocalBtn) {
+  loadLocalBtn.addEventListener('click', () => {
+    const key = storageKey.value.trim();
+
+    if (key) {
+      const value = localStorage.getItem(key);
+      if (value !== null) {
+        storageValue.value = value;
+        localStorageResult.textContent = `✅ Loaded: ${key} = "${value}"`;
+        localStorageResult.style.borderColor = '#34a853';
+        console.log('Loaded from localStorage:', { key, value });
+      } else {
+        localStorageResult.textContent = `❌ Key "${key}" not found`;
+        localStorageResult.style.borderColor = '#ea4335';
+      }
+    } else {
+      localStorageResult.textContent = '⚠️ Please enter a key';
+      localStorageResult.style.borderColor = '#fbbc04';
+    }
+  });
+}
+
+// Clear localStorage
+if (clearLocalBtn) {
+  clearLocalBtn.addEventListener('click', () => {
+    const key = storageKey.value.trim();
+
+    if (key) {
+      localStorage.removeItem(key);
+      localStorageResult.textContent = `✅ Cleared key: "${key}"`;
+      localStorageResult.style.borderColor = '#34a853';
+      storageValue.value = '';
+      console.log('Cleared from localStorage:', key);
+    } else {
+      localStorageResult.textContent = '⚠️ Please enter a key to clear';
+      localStorageResult.style.borderColor = '#fbbc04';
+    }
+  });
+}
+
+// ==========================================
+// INDEXEDDB
+// ==========================================
+
+const taskInput = document.getElementById('task-input');
+const addTaskBtn = document.getElementById('add-task-btn');
+const clearTasksBtn = document.getElementById('clear-tasks-btn');
+const tasksList = document.getElementById('tasks-list');
+const indexedDBResult = document.getElementById('indexeddb-result');
+
+let db;
+
+// Initialize IndexedDB
+function initIndexedDB() {
+  const request = indexedDB.open('PWA_Database', 1);
+
+  request.onerror = () => {
+    console.error('IndexedDB error:', request.error);
+    indexedDBResult.textContent = '❌ IndexedDB not available';
+    indexedDBResult.style.borderColor = '#ea4335';
+  };
+
+  request.onsuccess = () => {
+    db = request.result;
+    console.log('IndexedDB initialized');
+    loadTasks();
+  };
+
+  request.onupgradeneeded = (event) => {
+    db = event.target.result;
+
+    if (!db.objectStoreNames.contains('tasks')) {
+      const objectStore = db.createObjectStore('tasks', { keyPath: 'id', autoIncrement: true });
+      objectStore.createIndex('text', 'text', { unique: false });
+      objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+      console.log('IndexedDB object store created');
+    }
+  };
+}
+
+// Add task to IndexedDB
+function addTask(text) {
+  const transaction = db.transaction(['tasks'], 'readwrite');
+  const objectStore = transaction.objectStore('tasks');
+
+  const task = {
+    text: text,
+    timestamp: new Date().toISOString()
+  };
+
+  const request = objectStore.add(task);
+
+  request.onsuccess = () => {
+    console.log('Task added to IndexedDB:', task);
+    indexedDBResult.textContent = `✅ Task added: "${text}"`;
+    indexedDBResult.style.borderColor = '#34a853';
+    loadTasks();
+  };
+
+  request.onerror = () => {
+    console.error('Error adding task:', request.error);
+    indexedDBResult.textContent = '❌ Error adding task';
+    indexedDBResult.style.borderColor = '#ea4335';
+  };
+}
+
+// Load all tasks from IndexedDB
+function loadTasks() {
+  const transaction = db.transaction(['tasks'], 'readonly');
+  const objectStore = transaction.objectStore('tasks');
+  const request = objectStore.getAll();
+
+  request.onsuccess = () => {
+    const tasks = request.result;
+    displayTasks(tasks);
+  };
+
+  request.onerror = () => {
+    console.error('Error loading tasks:', request.error);
+  };
+}
+
+// Display tasks in the UI
+function displayTasks(tasks) {
+  tasksList.innerHTML = '';
+
+  if (tasks.length === 0) {
+    tasksList.innerHTML = '<p style="padding: 10px; color: #666;">No tasks yet. Add one above!</p>';
+    return;
+  }
+
+  tasks.forEach(task => {
+    const taskElement = document.createElement('div');
+    taskElement.className = 'task-item';
+    taskElement.innerHTML = `
+      <span>${task.text}</span>
+      <button onclick="deleteTask(${task.id})">Delete</button>
+    `;
+    tasksList.appendChild(taskElement);
+  });
+}
+
+// Delete a specific task
+window.deleteTask = function(id) {
+  const transaction = db.transaction(['tasks'], 'readwrite');
+  const objectStore = transaction.objectStore('tasks');
+  const request = objectStore.delete(id);
+
+  request.onsuccess = () => {
+    console.log('Task deleted:', id);
+    indexedDBResult.textContent = '✅ Task deleted';
+    indexedDBResult.style.borderColor = '#34a853';
+    loadTasks();
+  };
+
+  request.onerror = () => {
+    console.error('Error deleting task:', request.error);
+    indexedDBResult.textContent = '❌ Error deleting task';
+    indexedDBResult.style.borderColor = '#ea4335';
+  };
+};
+
+// Clear all tasks
+function clearAllTasks() {
+  const transaction = db.transaction(['tasks'], 'readwrite');
+  const objectStore = transaction.objectStore('tasks');
+  const request = objectStore.clear();
+
+  request.onsuccess = () => {
+    console.log('All tasks cleared');
+    indexedDBResult.textContent = '✅ All tasks cleared';
+    indexedDBResult.style.borderColor = '#34a853';
+    loadTasks();
+  };
+
+  request.onerror = () => {
+    console.error('Error clearing tasks:', request.error);
+    indexedDBResult.textContent = '❌ Error clearing tasks';
+    indexedDBResult.style.borderColor = '#ea4335';
+  };
+}
+
+// Event listeners for IndexedDB
+if (addTaskBtn) {
+  addTaskBtn.addEventListener('click', () => {
+    const text = taskInput.value.trim();
+    if (text) {
+      addTask(text);
+      taskInput.value = '';
+    } else {
+      indexedDBResult.textContent = '⚠️ Please enter a task';
+      indexedDBResult.style.borderColor = '#fbbc04';
+    }
+  });
+}
+
+if (clearTasksBtn) {
+  clearTasksBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear all tasks?')) {
+      clearAllTasks();
+    }
+  });
+}
+
+// Initialize IndexedDB on load
+if ('indexedDB' in window) {
+  initIndexedDB();
+} else {
+  indexedDBResult.textContent = '❌ IndexedDB not supported';
+  indexedDBResult.style.borderColor = '#ea4335';
+  addTaskBtn.disabled = true;
+  clearTasksBtn.disabled = true;
+}

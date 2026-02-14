@@ -39,11 +39,59 @@
                     <h2>🔌 Offline Ready</h2>
                     <p>Works offline with cached content</p>
                 </div>
+
+                <div class="feature-card">
+                    <h2>🔔 Push Notifications</h2>
+                    <p>Get real-time updates and alerts</p>
+                </div>
+
+                <div class="feature-card">
+                    <h2>💾 Local Storage</h2>
+                    <p>Save data locally for fast access</p>
+                </div>
             </section>
 
             <section class="status">
                 <h3>Service Worker Status</h3>
                 <p id="sw-status">Checking...</p>
+            </section>
+
+            <!-- Push Notifications Demo -->
+            <section class="demo-section">
+                <h3>🔔 Push Notifications Demo</h3>
+                <p id="notification-status">Notifications not enabled</p>
+                <div class="button-group">
+                    <button id="enable-notifications-btn" class="btn-primary">Enable Notifications</button>
+                    <button id="send-notification-btn" class="btn-secondary" disabled>Send Test Notification</button>
+                </div>
+            </section>
+
+            <!-- Storage Demo -->
+            <section class="demo-section">
+                <h3>💾 Storage Demo</h3>
+
+                <div class="storage-demo">
+                    <h4>LocalStorage</h4>
+                    <div class="input-group">
+                        <input type="text" id="storage-key" placeholder="Key" value="username">
+                        <input type="text" id="storage-value" placeholder="Value" value="PWA User">
+                        <button id="save-local-btn" class="btn-primary">Save</button>
+                        <button id="load-local-btn" class="btn-secondary">Load</button>
+                        <button id="clear-local-btn" class="btn-danger">Clear</button>
+                    </div>
+                    <p id="local-storage-result" class="result"></p>
+                </div>
+
+                <div class="storage-demo">
+                    <h4>IndexedDB</h4>
+                    <div class="input-group">
+                        <input type="text" id="task-input" placeholder="Enter a task" value="Test PWA features">
+                        <button id="add-task-btn" class="btn-primary">Add Task</button>
+                        <button id="clear-tasks-btn" class="btn-danger">Clear All</button>
+                    </div>
+                    <div id="tasks-list"></div>
+                    <p id="indexeddb-result" class="result"></p>
+                </div>
             </section>
 
             <section class="actions">
