@@ -141,12 +141,13 @@ if (enableNotificationsBtn) {
 // Helper function to show notification (uses service worker when available)
 async function showNotification(title, options) {
   try {
-    if (swRegistration && swRegistration.active) {
-      // Use service worker to show notification (more reliable and persistent)
-      await swRegistration.showNotification(title, options);
+    if ('serviceWorker' in navigator) {
+      // Wait for an active service worker (required on mobile, more reliable everywhere)
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
       console.log('Notification shown via Service Worker');
     } else {
-      // Fallback to regular Notification API
+      // Fallback to regular Notification API for browsers without service worker support
       const notification = new Notification(title, options);
 
       // Add click handler for regular notifications
