@@ -1,4 +1,8 @@
-// Display dynamic version from generated version.js
+// ==========================================
+// Family Dashboard - Main Application
+// ==========================================
+
+// Display dynamic version
 (function setVersion() {
   const el = document.getElementById('app-version');
   if (el && typeof APP_VERSION_DISPLAY !== 'undefined') {
@@ -6,510 +10,1461 @@
   }
 })();
 
-// Register Service Worker
-let swRegistration = null;
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then((registration) => {
-        console.log('Service Worker registered successfully:', registration.scope);
-        swRegistration = registration;
-        updateServiceWorkerStatus('Service Worker: Active ✓');
-
-        // Check notification status after service worker is ready
-        updateNotificationStatus();
-      })
-      .catch((error) => {
-        console.log('Service Worker registration failed:', error);
-        updateServiceWorkerStatus('Service Worker: Failed ✗');
-      });
-  });
-} else {
-  updateServiceWorkerStatus('Service Worker: Not supported');
-}
-
-// Update Service Worker status in UI
-function updateServiceWorkerStatus(message) {
-  const statusElement = document.getElementById('sw-status');
-  if (statusElement) {
-    statusElement.textContent = message;
-    statusElement.className = message.includes('Active') ? 'status-success' : 'status-error';
-  }
-}
-
-// Handle PWA installation
-let deferredPrompt;
-const installBtn = document.getElementById('install-btn');
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  console.log('beforeinstallprompt event fired');
-  // Prevent the mini-infobar from appearing
-  e.preventDefault();
-  // Stash the event so it can be triggered later
-  deferredPrompt = e;
-  // Show install button
-  if (installBtn) {
-    installBtn.style.display = 'block';
-  }
-});
-
-if (installBtn) {
-  installBtn.addEventListener('click', async () => {
-    if (deferredPrompt) {
-      // Show the install prompt
-      deferredPrompt.prompt();
-      // Wait for the user's response
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response: ${outcome}`);
-      // Clear the deferredPrompt
-      deferredPrompt = null;
-      // Hide the install button
-      installBtn.style.display = 'none';
-    }
-  });
-}
-
-// Handle successful installation
-window.addEventListener('appinstalled', () => {
-  console.log('PWA was installed successfully');
-  deferredPrompt = null;
-  if (installBtn) {
-    installBtn.style.display = 'none';
-  }
-});
-
-// Check if app is already installed
-if (window.matchMedia('(display-mode: standalone)').matches) {
-  console.log('App is running in standalone mode');
-  if (installBtn) {
-    installBtn.style.display = 'none';
-  }
-}
-
 // ==========================================
-// PUSH NOTIFICATIONS
+// CONSTANTS
 // ==========================================
 
-const notificationStatus = document.getElementById('notification-status');
-const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
-const sendNotificationBtn = document.getElementById('send-notification-btn');
+const DB_NAME = 'FamilyDashboardDB';
+const DB_VERSION = 1;
 
-// Check notification permission status
-function updateNotificationStatus() {
-  if (!('Notification' in window)) {
-    notificationStatus.textContent = '❌ Notifications not supported in this browser';
-    enableNotificationsBtn.disabled = true;
-    return;
-  }
+const AVATARS = [
+  '\u{1F468}', '\u{1F469}', '\u{1F466}', '\u{1F467}',
+  '\u{1F474}', '\u{1F475}', '\u{1F476}', '\u{1F9D1}',
+  '\u{1F431}', '\u{1F436}', '\u{1F984}', '\u{1F47B}',
+  '\u{1F916}', '\u{1F31F}', '\u{1F3C6}', '\u{1F680}'
+];
 
-  const permission = Notification.permission;
-  if (permission === 'granted') {
-    notificationStatus.textContent = '✅ Notifications enabled';
-    enableNotificationsBtn.style.display = 'none';
-    sendNotificationBtn.disabled = false;
-  } else if (permission === 'denied') {
-    notificationStatus.textContent = '❌ Notifications blocked. Enable in browser settings.';
-    enableNotificationsBtn.disabled = true;
-  } else {
-    notificationStatus.textContent = '⚠️ Notifications not enabled';
-    enableNotificationsBtn.disabled = false;
-  }
-}
+const COLORS = [
+  '#4285f4', '#34a853', '#ea4335', '#fbbc04',
+  '#9c27b0', '#ff5722', '#00bcd4', '#e91e63',
+  '#607d8b', '#795548', '#3f51b5', '#009688'
+];
 
-// Request notification permission
-if (enableNotificationsBtn) {
-  enableNotificationsBtn.addEventListener('click', async () => {
-    // Check for secure context (HTTPS or localhost) - required for notifications
-    if (window.isSecureContext === false) {
-      notificationStatus.textContent = '❌ Notifications require HTTPS. Use localhost or deploy to HTTPS.';
-      notificationStatus.style.background = '#ffebee';
-      return;
-    }
-
-    // Check if Notification API is available
-    if (!('Notification' in window)) {
-      notificationStatus.textContent = '❌ Notifications not supported in this browser';
-      enableNotificationsBtn.disabled = true;
-      return;
-    }
-
-    // Give immediate visual feedback
-    enableNotificationsBtn.disabled = true;
-    enableNotificationsBtn.textContent = 'Requesting Permission...';
-    notificationStatus.textContent = '⏳ Waiting for permission...';
-
-    try {
-      const permission = await Notification.requestPermission();
-      console.log('Notification permission:', permission);
-      updateNotificationStatus();
-
-      // Restore button if permission wasn't granted
-      if (permission !== 'granted') {
-        enableNotificationsBtn.disabled = false;
-        enableNotificationsBtn.textContent = 'Enable Notifications';
-      }
-
-      if (permission === 'granted') {
-        // Send a welcome notification using service worker
-        await showNotification('PWA Notifications Enabled! 🎉', {
-          body: 'You will now receive notifications from this app. Click to test!',
-          icon: './icon-192x192.png',
-          badge: './icon-192x192.png',
-          tag: 'welcome-notification',
-          vibrate: [200, 100, 200],
-          actions: [
-            { action: 'explore', title: 'Explore App' },
-            { action: 'close', title: 'Close' }
-          ]
-        });
-      }
-    } catch (error) {
-      console.error('Error requesting notification permission:', error);
-      notificationStatus.textContent = '❌ Error enabling notifications: ' + error.message;
-      notificationStatus.style.background = '#ffebee';
-      enableNotificationsBtn.disabled = false;
-      enableNotificationsBtn.textContent = 'Enable Notifications';
-    }
-  });
-}
-
-// Helper function to show notification (uses service worker when available)
-async function showNotification(title, options) {
-  try {
-    if ('serviceWorker' in navigator) {
-      // Wait for an active service worker (required on mobile, more reliable everywhere)
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, options);
-      console.log('Notification shown via Service Worker');
-    } else {
-      // Fallback to regular Notification API for browsers without service worker support
-      const notification = new Notification(title, options);
-
-      // Add click handler for regular notifications
-      notification.onclick = function(event) {
-        event.preventDefault();
-        console.log('Notification clicked:', title);
-        window.focus();
-        notification.close();
-      };
-
-      console.log('Notification shown via Notification API');
-    }
-  } catch (error) {
-    console.error('Error showing notification:', error);
-    throw error;
-  }
-}
-
-// Send test notification
-if (sendNotificationBtn) {
-  sendNotificationBtn.addEventListener('click', async () => {
-    if (Notification.permission === 'granted') {
-      const notifications = [
-        {
-          title: 'Test Notification 📱',
-          body: 'This is a test notification from your PWA! Click me to interact.',
-          data: { url: './' }
-        },
-        {
-          title: 'PWA Update 🚀',
-          body: 'Check out the new features: Push Notifications & Storage!',
-          data: { url: './' }
-        },
-        {
-          title: 'Reminder 🔔',
-          body: 'PWAs can work offline, cache content, and send notifications!',
-          data: { url: './' }
-        },
-        {
-          title: 'Storage Demo 💾',
-          body: 'Your data is safely stored locally using IndexedDB!',
-          data: { url: './' }
-        }
-      ];
-
-      const randomNotification = notifications[Math.floor(Math.random() * notifications.length)];
-
-      try {
-        await showNotification(randomNotification.title, {
-          body: randomNotification.body,
-          icon: './icon-192x192.png',
-          badge: './icon-192x192.png',
-          tag: 'test-notification-' + Date.now(),
-          requireInteraction: false,
-          vibrate: [200, 100, 200],
-          data: randomNotification.data,
-          actions: [
-            { action: 'open', title: 'Open App', icon: './icon-192x192.png' },
-            { action: 'dismiss', title: 'Dismiss' }
-          ]
-        });
-
-        // Update status
-        notificationStatus.textContent = '✅ Test notification sent! Check your system tray.';
-        notificationStatus.style.background = '#e8f5e9';
-
-        setTimeout(() => {
-          notificationStatus.textContent = '✅ Notifications enabled';
-          notificationStatus.style.background = '#f0f0f0';
-        }, 3000);
-
-        console.log('Test notification sent successfully');
-      } catch (error) {
-        console.error('Error sending test notification:', error);
-        notificationStatus.textContent = '❌ Error sending notification';
-        notificationStatus.style.background = '#ffebee';
-      }
-    }
-  });
-}
-
-// ==========================================
-// LOCAL STORAGE
-// ==========================================
-
-const storageKey = document.getElementById('storage-key');
-const storageValue = document.getElementById('storage-value');
-const saveLocalBtn = document.getElementById('save-local-btn');
-const loadLocalBtn = document.getElementById('load-local-btn');
-const clearLocalBtn = document.getElementById('clear-local-btn');
-const localStorageResult = document.getElementById('local-storage-result');
-
-// Save to localStorage
-if (saveLocalBtn) {
-  saveLocalBtn.addEventListener('click', () => {
-    const key = storageKey.value.trim();
-    const value = storageValue.value.trim();
-
-    if (key && value) {
-      try {
-        localStorage.setItem(key, value);
-        localStorageResult.textContent = `✅ Saved: ${key} = "${value}"`;
-        localStorageResult.style.borderColor = '#34a853';
-        console.log('Saved to localStorage:', { key, value });
-      } catch (error) {
-        localStorageResult.textContent = `❌ Error: ${error.message}`;
-        localStorageResult.style.borderColor = '#ea4335';
-      }
-    } else {
-      localStorageResult.textContent = '⚠️ Please enter both key and value';
-      localStorageResult.style.borderColor = '#fbbc04';
-    }
-  });
-}
-
-// Load from localStorage
-if (loadLocalBtn) {
-  loadLocalBtn.addEventListener('click', () => {
-    const key = storageKey.value.trim();
-
-    if (key) {
-      const value = localStorage.getItem(key);
-      if (value !== null) {
-        storageValue.value = value;
-        localStorageResult.textContent = `✅ Loaded: ${key} = "${value}"`;
-        localStorageResult.style.borderColor = '#34a853';
-        console.log('Loaded from localStorage:', { key, value });
-      } else {
-        localStorageResult.textContent = `❌ Key "${key}" not found`;
-        localStorageResult.style.borderColor = '#ea4335';
-      }
-    } else {
-      localStorageResult.textContent = '⚠️ Please enter a key';
-      localStorageResult.style.borderColor = '#fbbc04';
-    }
-  });
-}
-
-// Clear localStorage
-if (clearLocalBtn) {
-  clearLocalBtn.addEventListener('click', () => {
-    const key = storageKey.value.trim();
-
-    if (key) {
-      localStorage.removeItem(key);
-      localStorageResult.textContent = `✅ Cleared key: "${key}"`;
-      localStorageResult.style.borderColor = '#34a853';
-      storageValue.value = '';
-      console.log('Cleared from localStorage:', key);
-    } else {
-      localStorageResult.textContent = '⚠️ Please enter a key to clear';
-      localStorageResult.style.borderColor = '#fbbc04';
-    }
-  });
-}
-
-// ==========================================
-// INDEXEDDB
-// ==========================================
-
-const taskInput = document.getElementById('task-input');
-const addTaskBtn = document.getElementById('add-task-btn');
-const clearTasksBtn = document.getElementById('clear-tasks-btn');
-const tasksList = document.getElementById('tasks-list');
-const indexedDBResult = document.getElementById('indexeddb-result');
-
-let db;
-
-// Initialize IndexedDB
-function initIndexedDB() {
-  const request = indexedDB.open('PWA_Database', 1);
-
-  request.onerror = () => {
-    console.error('IndexedDB error:', request.error);
-    indexedDBResult.textContent = '❌ IndexedDB not available';
-    indexedDBResult.style.borderColor = '#ea4335';
-  };
-
-  request.onsuccess = () => {
-    db = request.result;
-    console.log('IndexedDB initialized');
-    loadTasks();
-  };
-
-  request.onupgradeneeded = (event) => {
-    db = event.target.result;
-
-    if (!db.objectStoreNames.contains('tasks')) {
-      const objectStore = db.createObjectStore('tasks', { keyPath: 'id', autoIncrement: true });
-      objectStore.createIndex('text', 'text', { unique: false });
-      objectStore.createIndex('timestamp', 'timestamp', { unique: false });
-      console.log('IndexedDB object store created');
-    }
-  };
-}
-
-// Add task to IndexedDB
-function addTask(text) {
-  const transaction = db.transaction(['tasks'], 'readwrite');
-  const objectStore = transaction.objectStore('tasks');
-
-  const task = {
-    text: text,
-    timestamp: new Date().toISOString()
-  };
-
-  const request = objectStore.add(task);
-
-  request.onsuccess = () => {
-    console.log('Task added to IndexedDB:', task);
-    indexedDBResult.textContent = `✅ Task added: "${text}"`;
-    indexedDBResult.style.borderColor = '#34a853';
-    loadTasks();
-  };
-
-  request.onerror = () => {
-    console.error('Error adding task:', request.error);
-    indexedDBResult.textContent = '❌ Error adding task';
-    indexedDBResult.style.borderColor = '#ea4335';
-  };
-}
-
-// Load all tasks from IndexedDB
-function loadTasks() {
-  const transaction = db.transaction(['tasks'], 'readonly');
-  const objectStore = transaction.objectStore('tasks');
-  const request = objectStore.getAll();
-
-  request.onsuccess = () => {
-    const tasks = request.result;
-    displayTasks(tasks);
-  };
-
-  request.onerror = () => {
-    console.error('Error loading tasks:', request.error);
-  };
-}
-
-// Display tasks in the UI
-function displayTasks(tasks) {
-  tasksList.innerHTML = '';
-
-  if (tasks.length === 0) {
-    tasksList.innerHTML = '<p style="padding: 10px; color: #666;">No tasks yet. Add one above!</p>';
-    return;
-  }
-
-  tasks.forEach(task => {
-    const taskElement = document.createElement('div');
-    taskElement.className = 'task-item';
-    taskElement.innerHTML = `
-      <span>${task.text}</span>
-      <button onclick="deleteTask(${task.id})">Delete</button>
-    `;
-    tasksList.appendChild(taskElement);
-  });
-}
-
-// Delete a specific task
-window.deleteTask = function(id) {
-  const transaction = db.transaction(['tasks'], 'readwrite');
-  const objectStore = transaction.objectStore('tasks');
-  const request = objectStore.delete(id);
-
-  request.onsuccess = () => {
-    console.log('Task deleted:', id);
-    indexedDBResult.textContent = '✅ Task deleted';
-    indexedDBResult.style.borderColor = '#34a853';
-    loadTasks();
-  };
-
-  request.onerror = () => {
-    console.error('Error deleting task:', request.error);
-    indexedDBResult.textContent = '❌ Error deleting task';
-    indexedDBResult.style.borderColor = '#ea4335';
-  };
+const CATEGORY_LABELS = {
+  kitchen: 'Kitchen', bathroom: 'Bathroom', bedroom: 'Bedroom',
+  living_room: 'Living Room', garden: 'Garden', laundry: 'Laundry',
+  shopping: 'Shopping', pets: 'Pets', general: 'General', other: 'Other'
 };
 
-// Clear all tasks
-function clearAllTasks() {
-  const transaction = db.transaction(['tasks'], 'readwrite');
-  const objectStore = transaction.objectStore('tasks');
-  const request = objectStore.clear();
+const FREQUENCY_LABELS = {
+  once: 'One Time', daily: 'Daily', every_x_days: 'Every X Days',
+  weekly: 'Weekly', biweekly: 'Biweekly', monthly: 'Monthly'
+};
 
-  request.onsuccess = () => {
-    console.log('All tasks cleared');
-    indexedDBResult.textContent = '✅ All tasks cleared';
-    indexedDBResult.style.borderColor = '#34a853';
-    loadTasks();
-  };
+const EFFORT_LABELS = {
+  quick: 'Quick (< 15 min)', medium: 'Medium (15-45 min)', long: 'Long (45+ min)'
+};
 
-  request.onerror = () => {
-    console.error('Error clearing tasks:', request.error);
-    indexedDBResult.textContent = '❌ Error clearing tasks';
-    indexedDBResult.style.borderColor = '#ea4335';
-  };
+const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
+// ==========================================
+// STATE
+// ==========================================
+
+let db = null;
+let familyMembers = [];
+let chores = [];
+let completions = [];
+let currentView = 'dashboard';
+let editingChoreId = null;
+let completingChoreId = null;
+let selectedAvatar = AVATARS[0];
+let selectedColor = COLORS[0];
+
+// ==========================================
+// DATABASE LAYER
+// ==========================================
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+
+    request.onsuccess = () => {
+      db = request.result;
+      resolve(db);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
+
+      if (!database.objectStoreNames.contains('familyMembers')) {
+        const fmStore = database.createObjectStore('familyMembers', { keyPath: 'id', autoIncrement: true });
+        fmStore.createIndex('name', 'name', { unique: false });
+      }
+
+      if (!database.objectStoreNames.contains('chores')) {
+        const choreStore = database.createObjectStore('chores', { keyPath: 'id', autoIncrement: true });
+        choreStore.createIndex('status', 'status', { unique: false });
+        choreStore.createIndex('nextDue', 'nextDue', { unique: false });
+        choreStore.createIndex('assignedTo', 'assignedTo', { unique: false });
+        choreStore.createIndex('category', 'category', { unique: false });
+      }
+
+      if (!database.objectStoreNames.contains('completions')) {
+        const compStore = database.createObjectStore('completions', { keyPath: 'id', autoIncrement: true });
+        compStore.createIndex('choreId', 'choreId', { unique: false });
+        compStore.createIndex('completedBy', 'completedBy', { unique: false });
+        compStore.createIndex('completedAt', 'completedAt', { unique: false });
+      }
+    };
+  });
 }
 
-// Event listeners for IndexedDB
-if (addTaskBtn) {
-  addTaskBtn.addEventListener('click', () => {
-    const text = taskInput.value.trim();
-    if (text) {
-      addTask(text);
-      taskInput.value = '';
+function dbAdd(storeName, data) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.add(data);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function dbGetAll(storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readonly');
+    const store = tx.objectStore(storeName);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function dbGet(storeName, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readonly');
+    const store = tx.objectStore(storeName);
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function dbPut(storeName, data) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.put(data);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function dbDelete(storeName, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ==========================================
+// DATA LOADING
+// ==========================================
+
+async function loadAllData() {
+  familyMembers = await dbGetAll('familyMembers');
+  chores = await dbGetAll('chores');
+  completions = await dbGetAll('completions');
+}
+
+function getMemberById(id) {
+  return familyMembers.find(m => m.id === id) || null;
+}
+
+// ==========================================
+// DATE UTILITIES
+// ==========================================
+
+function today() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function toDateStr(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDate(str) {
+  const parts = str.split('-');
+  return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+}
+
+function daysBetween(date1, date2) {
+  const d1 = new Date(date1);
+  d1.setHours(0, 0, 0, 0);
+  const d2 = new Date(date2);
+  d2.setHours(0, 0, 0, 0);
+  return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+}
+
+function daysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'N/A';
+  const d = parseDate(dateStr);
+  const options = { weekday: 'short', month: 'short', day: 'numeric' };
+  return d.toLocaleDateString('en-GB', options);
+}
+
+function formatDateTime(isoStr) {
+  if (!isoStr) return 'N/A';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function getStartOfWeek() {
+  const d = today();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d;
+}
+
+// ==========================================
+// SCHEDULING ENGINE
+// ==========================================
+
+function calculateInitialNextDue(choreData) {
+  const startDate = choreData.startDate ? parseDate(choreData.startDate) : today();
+
+  switch (choreData.frequency) {
+    case 'once':
+    case 'daily':
+    case 'every_x_days':
+    case 'biweekly':
+      return toDateStr(startDate);
+
+    case 'weekly': {
+      const weeklyDays = choreData.weeklyDays || [];
+      if (weeklyDays.length === 0) return toDateStr(startDate);
+      for (let i = 0; i <= 7; i++) {
+        const candidate = new Date(startDate);
+        candidate.setDate(candidate.getDate() + i);
+        if (weeklyDays.includes(candidate.getDay())) {
+          return toDateStr(candidate);
+        }
+      }
+      return toDateStr(startDate);
+    }
+
+    case 'monthly': {
+      const monthly = new Date(startDate);
+      const targetDay = choreData.monthlyDay || 1;
+      if (monthly.getDate() > targetDay) {
+        monthly.setMonth(monthly.getMonth() + 1);
+      }
+      const maxDay = daysInMonth(monthly.getFullYear(), monthly.getMonth());
+      monthly.setDate(Math.min(targetDay, maxDay));
+      return toDateStr(monthly);
+    }
+
+    default:
+      return toDateStr(startDate);
+  }
+}
+
+function calculateNextDue(chore, afterDate) {
+  const from = afterDate ? parseDate(afterDate) : today();
+
+  switch (chore.frequency) {
+    case 'once':
+      return null; // one-time chores don't recur
+
+    case 'daily': {
+      const next = new Date(from);
+      next.setDate(next.getDate() + 1);
+      return toDateStr(next);
+    }
+
+    case 'every_x_days': {
+      const next = new Date(from);
+      next.setDate(next.getDate() + (chore.intervalDays || 3));
+      return toDateStr(next);
+    }
+
+    case 'weekly': {
+      const weeklyDays = chore.weeklyDays || [];
+      if (weeklyDays.length === 0) return null;
+      for (let i = 1; i <= 7; i++) {
+        const candidate = new Date(from);
+        candidate.setDate(candidate.getDate() + i);
+        if (weeklyDays.includes(candidate.getDay())) {
+          return toDateStr(candidate);
+        }
+      }
+      return null;
+    }
+
+    case 'biweekly': {
+      const next = new Date(from);
+      next.setDate(next.getDate() + 14);
+      return toDateStr(next);
+    }
+
+    case 'monthly': {
+      const next = new Date(from);
+      next.setMonth(next.getMonth() + 1);
+      const targetDay = chore.monthlyDay || 1;
+      const maxDay = daysInMonth(next.getFullYear(), next.getMonth());
+      next.setDate(Math.min(targetDay, maxDay));
+      return toDateStr(next);
+    }
+
+    default:
+      return null;
+  }
+}
+
+function getChoreStatus(chore) {
+  if (chore.status === 'paused') return 'paused';
+  if (chore.status === 'completed') return 'completed';
+  if (!chore.nextDue) return 'no-date';
+
+  const daysUntil = daysBetween(today(), parseDate(chore.nextDue));
+
+  if (daysUntil > 0) return 'upcoming';
+  if (daysUntil === 0) return 'due-today';
+  // Past due
+  const daysLate = Math.abs(daysUntil);
+  if (daysLate <= (chore.slackDays || 0)) return 'grace-period';
+  return 'overdue';
+}
+
+function getDueStatusText(chore) {
+  const status = getChoreStatus(chore);
+  if (!chore.nextDue) return { text: 'No date', cssClass: '' };
+  const daysUntil = daysBetween(today(), parseDate(chore.nextDue));
+
+  switch (status) {
+    case 'overdue': {
+      const daysLate = Math.abs(daysUntil);
+      return {
+        text: daysLate === 1 ? '1 day overdue' : `${daysLate} days overdue`,
+        cssClass: 'due-overdue'
+      };
+    }
+    case 'grace-period': {
+      const daysLate = Math.abs(daysUntil);
+      const remaining = (chore.slackDays || 0) - daysLate;
+      return {
+        text: `Grace period (${remaining}d left)`,
+        cssClass: 'due-grace'
+      };
+    }
+    case 'due-today':
+      return { text: 'Due today', cssClass: 'due-today' };
+    case 'upcoming': {
+      if (daysUntil === 1) return { text: 'Due tomorrow', cssClass: 'due-upcoming' };
+      return { text: `Due in ${daysUntil} days`, cssClass: 'due-upcoming' };
+    }
+    case 'paused':
+      return { text: 'Paused', cssClass: '' };
+    case 'completed':
+      return { text: 'Completed', cssClass: '' };
+    default:
+      return { text: '', cssClass: '' };
+  }
+}
+
+// ==========================================
+// CHORE OPERATIONS
+// ==========================================
+
+async function saveChore(choreData) {
+  choreData.updatedAt = new Date().toISOString();
+
+  if (choreData.id) {
+    await dbPut('chores', choreData);
+  } else {
+    choreData.createdAt = new Date().toISOString();
+    choreData.completionCount = 0;
+    choreData.currentStreak = 0;
+    choreData.bestStreak = 0;
+    choreData.currentPostponeStreak = 0;
+    choreData.lastCompleted = null;
+    choreData.status = 'active';
+    choreData.rotationIndex = 0;
+    choreData.nextDue = calculateInitialNextDue(choreData);
+    choreData.id = await dbAdd('chores', choreData);
+  }
+
+  await loadAllData();
+  renderCurrentView();
+}
+
+async function deleteChore(id) {
+  await dbDelete('chores', id);
+  await loadAllData();
+  renderCurrentView();
+}
+
+async function completeChore(choreId, memberId, notes) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  const todayStr = toDateStr(today());
+  const wasOnTime = chore.nextDue ? daysBetween(parseDate(chore.nextDue), today()) <= 0 : true;
+  const wasInGrace = getChoreStatus(chore) === 'grace-period';
+  const wasPostponed = chore.currentPostponeStreak > 0;
+
+  // Record completion
+  const completion = {
+    choreId: choreId,
+    completedBy: memberId,
+    completedAt: new Date().toISOString(),
+    scheduledFor: chore.nextDue || todayStr,
+    wasOnTime: wasOnTime && !wasInGrace,
+    wasPostponed: wasPostponed,
+    postponeCount: chore.currentPostponeStreak,
+    notes: notes || '',
+    pointsAwarded: calculatePoints(chore, wasOnTime && !wasInGrace)
+  };
+  await dbAdd('completions', completion);
+
+  // Update chore
+  chore.lastCompleted = todayStr;
+  chore.completionCount = (chore.completionCount || 0) + 1;
+  chore.currentPostponeStreak = 0;
+
+  // Streak tracking
+  if (wasOnTime && !wasInGrace) {
+    chore.currentStreak = (chore.currentStreak || 0) + 1;
+    if (chore.currentStreak > (chore.bestStreak || 0)) {
+      chore.bestStreak = chore.currentStreak;
+    }
+  } else {
+    chore.currentStreak = 0;
+  }
+
+  // Rotation
+  if (chore.rotationEnabled && chore.rotationMembers && chore.rotationMembers.length > 0) {
+    chore.rotationIndex = ((chore.rotationIndex || 0) + 1) % chore.rotationMembers.length;
+    chore.assignedTo = chore.rotationMembers[chore.rotationIndex];
+  }
+
+  // Calculate next due
+  if (chore.frequency === 'once') {
+    chore.status = 'completed';
+    chore.nextDue = null;
+  } else {
+    const nextDue = calculateNextDue(chore, todayStr);
+    chore.nextDue = nextDue;
+  }
+
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+
+  await loadAllData();
+  renderCurrentView();
+}
+
+function calculatePoints(chore, wasOnTime) {
+  let points = chore.points || 0;
+
+  if (chore.bonusEarly && wasOnTime) {
+    points = Math.round(points * 1.5);
+  }
+
+  if (chore.streakBonus && wasOnTime) {
+    points += (chore.currentStreak || 0);
+  }
+
+  return points;
+}
+
+async function postponeChore(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  // Check postpone limit
+  if (chore.maxPostpones !== -1 && chore.currentPostponeStreak >= chore.maxPostpones) {
+    alert(`Cannot postpone: max consecutive postpones (${chore.maxPostpones}) reached. Complete this chore first!`);
+    return;
+  }
+
+  chore.currentPostponeStreak = (chore.currentPostponeStreak || 0) + 1;
+
+  if (chore.autoReschedule && chore.nextDue) {
+    const snoozeDays = chore.snoozeDays || 1;
+    const currentDue = parseDate(chore.nextDue);
+    currentDue.setDate(currentDue.getDate() + snoozeDays);
+    chore.nextDue = toDateStr(currentDue);
+  }
+
+  // Break the streak on postpone
+  chore.currentStreak = 0;
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+
+  await loadAllData();
+  renderCurrentView();
+}
+
+async function togglePauseChore(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  if (chore.status === 'paused') {
+    chore.status = 'active';
+    // Reschedule from today if the old due date is past
+    if (chore.nextDue && daysBetween(today(), parseDate(chore.nextDue)) < 0) {
+      chore.nextDue = toDateStr(today());
+    }
+  } else {
+    chore.status = 'paused';
+  }
+
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+
+  await loadAllData();
+  renderCurrentView();
+}
+
+// ==========================================
+// FAMILY MEMBER OPERATIONS
+// ==========================================
+
+async function saveFamilyMember(data) {
+  if (data.id) {
+    await dbPut('familyMembers', data);
+  } else {
+    data.createdAt = new Date().toISOString();
+    data.id = await dbAdd('familyMembers', data);
+  }
+  await loadAllData();
+  renderCurrentView();
+  populateMemberDropdowns();
+}
+
+async function deleteFamilyMember(id) {
+  await dbDelete('familyMembers', id);
+  await loadAllData();
+  renderCurrentView();
+  populateMemberDropdowns();
+}
+
+function getMemberPoints(memberId, sinceDate) {
+  return completions
+    .filter(c => c.completedBy === memberId && (!sinceDate || new Date(c.completedAt) >= sinceDate))
+    .reduce((sum, c) => sum + (c.pointsAwarded || 0), 0);
+}
+
+function getMemberCompletionCount(memberId, sinceDate) {
+  return completions
+    .filter(c => c.completedBy === memberId && (!sinceDate || new Date(c.completedAt) >= sinceDate))
+    .length;
+}
+
+// ==========================================
+// NAVIGATION
+// ==========================================
+
+function switchView(viewName) {
+  currentView = viewName;
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === viewName);
+  });
+
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.toggle('active', v.id === `view-${viewName}`);
+  });
+
+  renderCurrentView();
+}
+
+function renderCurrentView() {
+  switch (currentView) {
+    case 'dashboard': renderDashboard(); break;
+    case 'chores': renderChoresList(); break;
+    case 'family': renderFamilyView(); break;
+  }
+}
+
+// ==========================================
+// DASHBOARD RENDERING
+// ==========================================
+
+function renderDashboard() {
+  const todayStr = toDateStr(today());
+  const activeChores = chores.filter(c => c.status === 'active');
+
+  // Categorize chores
+  const overdueChores = [];
+  const todayChores = [];
+  const upcomingChores = [];
+
+  activeChores.forEach(c => {
+    const status = getChoreStatus(c);
+    if (status === 'overdue') overdueChores.push(c);
+    else if (status === 'due-today' || status === 'grace-period') todayChores.push(c);
+    else if (status === 'upcoming') {
+      const daysUntil = daysBetween(today(), parseDate(c.nextDue));
+      if (daysUntil <= 7) upcomingChores.push(c);
+    }
+  });
+
+  // Sort by priority
+  const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] || 2) - (PRIORITY_ORDER[b.priority] || 2);
+  overdueChores.sort(sortByPriority);
+  todayChores.sort(sortByPriority);
+  upcomingChores.sort((a, b) => {
+    const dateCompare = a.nextDue.localeCompare(b.nextDue);
+    return dateCompare !== 0 ? dateCompare : sortByPriority(a, b);
+  });
+
+  // Stats
+  const todayCompletions = completions.filter(c => toDateStr(new Date(c.completedAt)) === todayStr);
+  const bestStreak = chores.reduce((max, c) => Math.max(max, c.bestStreak || 0), 0);
+
+  document.getElementById('stat-today').textContent = todayChores.length;
+  document.getElementById('stat-overdue').textContent = overdueChores.length;
+  document.getElementById('stat-done-today').textContent = todayCompletions.length;
+  document.getElementById('stat-streak').textContent = bestStreak;
+
+  // Render overdue
+  const overdueSection = document.getElementById('section-overdue');
+  const overdueContainer = document.getElementById('dashboard-overdue');
+  if (overdueChores.length > 0) {
+    overdueSection.style.display = '';
+    overdueContainer.innerHTML = overdueChores.map(c => renderChoreCard(c)).join('');
+  } else {
+    overdueSection.style.display = 'none';
+  }
+
+  // Render today
+  const todayContainer = document.getElementById('dashboard-today');
+  const todayEmpty = document.getElementById('today-empty');
+  if (todayChores.length > 0) {
+    todayContainer.innerHTML = todayChores.map(c => renderChoreCard(c)).join('');
+    todayEmpty.style.display = 'none';
+  } else {
+    todayContainer.innerHTML = '';
+    todayEmpty.style.display = '';
+  }
+
+  // Render upcoming
+  const upcomingContainer = document.getElementById('dashboard-upcoming');
+  const upcomingEmpty = document.getElementById('upcoming-empty');
+  if (upcomingChores.length > 0) {
+    upcomingContainer.innerHTML = upcomingChores.map(c => renderChoreCard(c)).join('');
+    upcomingEmpty.style.display = 'none';
+  } else {
+    upcomingContainer.innerHTML = '';
+    upcomingEmpty.style.display = '';
+  }
+
+  // Render leaderboard
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const container = document.getElementById('dashboard-leaderboard');
+  const empty = document.getElementById('leaderboard-empty');
+
+  if (familyMembers.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  const weekStart = getStartOfWeek();
+
+  const memberStats = familyMembers.map(member => {
+    const points = getMemberPoints(member.id, weekStart);
+    const count = getMemberCompletionCount(member.id, weekStart);
+    return { member, points, count };
+  }).sort((a, b) => b.points - a.points);
+
+  container.innerHTML = memberStats.map((stat, index) => `
+    <div class="leaderboard-item">
+      <div class="leaderboard-rank ${index < 3 ? 'rank-' + (index + 1) : ''}">#${index + 1}</div>
+      <div class="leaderboard-avatar" style="background:${stat.member.color}">${stat.member.avatar}</div>
+      <div class="leaderboard-info">
+        <div class="leaderboard-name">${escapeHtml(stat.member.name)}</div>
+        <div class="leaderboard-stats">${stat.count} chore${stat.count !== 1 ? 's' : ''} completed this week</div>
+      </div>
+      <div class="leaderboard-points">${stat.points} pts</div>
+    </div>
+  `).join('');
+}
+
+// ==========================================
+// CHORE CARD RENDERING
+// ==========================================
+
+function renderChoreCard(chore) {
+  const status = getChoreStatus(chore);
+  const dueStatus = getDueStatusText(chore);
+  const member = chore.assignedTo ? getMemberById(chore.assignedTo) : null;
+  const catLabel = CATEGORY_LABELS[chore.category] || chore.category;
+
+  let statusClass = '';
+  if (status === 'overdue') statusClass = 'status-overdue';
+  else if (status === 'grace-period') statusClass = 'status-grace';
+
+  const canPostpone = chore.maxPostpones === -1 || (chore.currentPostponeStreak || 0) < chore.maxPostpones;
+
+  let actions = '';
+  if (chore.status === 'paused') {
+    actions = `<button class="chore-action-btn btn-resume" onclick="event.stopPropagation(); togglePauseChore(${chore.id})">Resume</button>`;
+  } else if (chore.status === 'active') {
+    actions = `
+      <button class="chore-action-btn btn-complete" onclick="event.stopPropagation(); openCompleteModal(${chore.id})">Done</button>
+      ${canPostpone && chore.maxPostpones !== 0 ? `<button class="chore-action-btn btn-postpone" onclick="event.stopPropagation(); postponeChore(${chore.id})">Later</button>` : ''}
+    `;
+  }
+
+  const avatarHtml = member
+    ? `<div class="chore-assigned-avatar" style="background:${member.color}" title="${escapeHtml(member.name)}">${member.avatar}</div>`
+    : '';
+
+  return `
+    <div class="chore-card priority-${chore.priority} ${statusClass}" onclick="openDetailModal(${chore.id})">
+      ${avatarHtml}
+      <div class="chore-card-body">
+        <div class="chore-card-top">
+          <span class="chore-card-title">${escapeHtml(chore.title)}</span>
+          <span class="chore-badge badge-category badge-cat-${chore.category}">${catLabel}</span>
+          ${chore.currentStreak > 0 ? `<span class="chore-card-streak">${chore.currentStreak} streak</span>` : ''}
+        </div>
+        <div class="chore-card-meta">
+          <span class="chore-due-status ${dueStatus.cssClass}">${dueStatus.text}</span>
+          ${chore.nextDue ? `<span>${formatDate(chore.nextDue)}</span>` : ''}
+          <span class="chore-card-points">${chore.points || 0} pts</span>
+          ${chore.preferredTime !== 'anytime' ? `<span>${chore.preferredTime}</span>` : ''}
+          ${member ? `<span>${escapeHtml(member.name)}</span>` : '<span>Anyone</span>'}
+        </div>
+      </div>
+      <div class="chore-card-actions">
+        ${actions}
+      </div>
+    </div>
+  `;
+}
+
+// ==========================================
+// CHORES LIST RENDERING
+// ==========================================
+
+function renderChoresList() {
+  const filterStatus = document.getElementById('filter-status').value;
+  const filterMember = document.getElementById('filter-member').value;
+  const filterCategory = document.getElementById('filter-category').value;
+  const filterPriority = document.getElementById('filter-priority').value;
+
+  let filtered = chores.filter(c => {
+    // Status filter
+    if (filterStatus === 'all' && c.status !== 'active') return false;
+    if (filterStatus === 'paused' && c.status !== 'paused') return false;
+    if (filterStatus !== 'all' && filterStatus !== 'paused' && c.status !== 'active') return false;
+
+    if (filterStatus === 'today') {
+      const s = getChoreStatus(c);
+      if (s !== 'due-today' && s !== 'grace-period') return false;
+    }
+    if (filterStatus === 'overdue' && getChoreStatus(c) !== 'overdue') return false;
+    if (filterStatus === 'grace' && getChoreStatus(c) !== 'grace-period') return false;
+    if (filterStatus === 'upcoming') {
+      if (!c.nextDue) return false;
+      const daysUntil = daysBetween(today(), parseDate(c.nextDue));
+      if (daysUntil < 0 || daysUntil > 7) return false;
+    }
+
+    // Member filter
+    if (filterMember !== 'all') {
+      const memberId = parseInt(filterMember);
+      if (c.assignedTo !== memberId) return false;
+    }
+
+    // Category filter
+    if (filterCategory !== 'all' && c.category !== filterCategory) return false;
+
+    // Priority filter
+    if (filterPriority !== 'all' && c.priority !== filterPriority) return false;
+
+    return true;
+  });
+
+  // Sort: overdue first, then by priority, then by due date
+  filtered.sort((a, b) => {
+    const statusA = getChoreStatus(a);
+    const statusB = getChoreStatus(b);
+    const statusOrder = { 'overdue': 0, 'grace-period': 1, 'due-today': 2, 'upcoming': 3, 'paused': 4 };
+    const sA = statusOrder[statusA] !== undefined ? statusOrder[statusA] : 5;
+    const sB = statusOrder[statusB] !== undefined ? statusOrder[statusB] : 5;
+    if (sA !== sB) return sA - sB;
+
+    const pA = PRIORITY_ORDER[a.priority] || 2;
+    const pB = PRIORITY_ORDER[b.priority] || 2;
+    if (pA !== pB) return pA - pB;
+
+    if (a.nextDue && b.nextDue) return a.nextDue.localeCompare(b.nextDue);
+    return 0;
+  });
+
+  const container = document.getElementById('chores-list');
+  const empty = document.getElementById('chores-empty');
+
+  if (filtered.length > 0) {
+    container.innerHTML = filtered.map(c => renderChoreCard(c)).join('');
+    empty.style.display = 'none';
+  } else {
+    container.innerHTML = '';
+    empty.style.display = '';
+  }
+}
+
+// ==========================================
+// FAMILY VIEW RENDERING
+// ==========================================
+
+function renderFamilyView() {
+  const container = document.getElementById('family-list');
+  const empty = document.getElementById('family-empty');
+
+  if (familyMembers.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  const weekStart = getStartOfWeek();
+
+  container.innerHTML = familyMembers.map(member => {
+    const weekPoints = getMemberPoints(member.id, weekStart);
+    const totalPoints = getMemberPoints(member.id, null);
+    const weekCount = getMemberCompletionCount(member.id, weekStart);
+    const assignedCount = chores.filter(c => c.assignedTo === member.id && c.status === 'active').length;
+
+    return `
+      <div class="family-card" onclick="openEditFamilyModal(${member.id})">
+        <div class="family-avatar" style="background:${member.color}">${member.avatar}</div>
+        <div class="family-info">
+          <div class="family-name">${escapeHtml(member.name)}</div>
+          <div class="family-role">${member.role}</div>
+          <div class="family-stats">
+            <span class="family-stat"><span class="family-stat-value">${assignedCount}</span> assigned</span>
+            <span class="family-stat"><span class="family-stat-value">${weekCount}</span> this week</span>
+            <span class="family-stat"><span class="family-stat-value">${weekPoints}</span> pts/wk</span>
+            <span class="family-stat"><span class="family-stat-value">${totalPoints}</span> total pts</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==========================================
+// CHORE MODAL
+// ==========================================
+
+function openChoreModal(choreId) {
+  editingChoreId = choreId || null;
+  const modal = document.getElementById('chore-modal');
+  const title = document.getElementById('chore-modal-title');
+  const deleteBtn = document.getElementById('chore-delete-btn');
+  const form = document.getElementById('chore-form');
+
+  populateChoreFormDropdowns();
+
+  if (choreId) {
+    title.textContent = 'Edit Chore';
+    deleteBtn.style.display = '';
+    const chore = chores.find(c => c.id === choreId);
+    if (chore) populateChoreForm(chore);
+  } else {
+    title.textContent = 'New Chore';
+    deleteBtn.style.display = 'none';
+    form.reset();
+    document.getElementById('chore-start-date').value = toDateStr(today());
+    document.getElementById('chore-slack').value = '1';
+    document.getElementById('chore-max-postpones').value = '3';
+    document.getElementById('chore-auto-reschedule').checked = true;
+    document.getElementById('chore-snooze-days').value = '1';
+    document.getElementById('chore-points').value = '10';
+    document.getElementById('chore-streak-bonus').checked = true;
+    document.getElementById('chore-bonus-early').checked = false;
+    document.getElementById('chore-rotation').checked = false;
+    document.getElementById('chore-priority').value = 'medium';
+    document.getElementById('chore-effort').value = 'medium';
+    updateFrequencyFields();
+    updateRotationFields();
+  }
+
+  modal.style.display = 'flex';
+}
+
+function populateChoreForm(chore) {
+  document.getElementById('chore-id').value = chore.id;
+  document.getElementById('chore-title').value = chore.title || '';
+  document.getElementById('chore-description').value = chore.description || '';
+  document.getElementById('chore-category').value = chore.category || 'general';
+  document.getElementById('chore-priority').value = chore.priority || 'medium';
+  document.getElementById('chore-assigned').value = chore.assignedTo || '';
+  document.getElementById('chore-rotation').checked = !!chore.rotationEnabled;
+  document.getElementById('chore-frequency').value = chore.frequency || 'daily';
+  document.getElementById('chore-interval').value = chore.intervalDays || 3;
+  document.getElementById('chore-monthly-day').value = chore.monthlyDay || 1;
+  document.getElementById('chore-start-date').value = chore.startDate || chore.nextDue || '';
+  document.getElementById('chore-preferred-time').value = chore.preferredTime || 'anytime';
+  document.getElementById('chore-slack').value = chore.slackDays !== undefined ? chore.slackDays : 1;
+  document.getElementById('chore-max-postpones').value = chore.maxPostpones !== undefined ? chore.maxPostpones : 3;
+  document.getElementById('chore-auto-reschedule').checked = chore.autoReschedule !== false;
+  document.getElementById('chore-snooze-days').value = chore.snoozeDays || 1;
+  document.getElementById('chore-effort').value = chore.effortLevel || 'medium';
+  document.getElementById('chore-points').value = chore.points !== undefined ? chore.points : 10;
+  document.getElementById('chore-bonus-early').checked = !!chore.bonusEarly;
+  document.getElementById('chore-streak-bonus').checked = chore.streakBonus !== false;
+  document.getElementById('chore-notes').value = chore.notes || '';
+
+  // Weekly days
+  document.querySelectorAll('[name="weekday"]').forEach(cb => {
+    cb.checked = (chore.weeklyDays || []).includes(parseInt(cb.value));
+  });
+
+  // Rotation members
+  updateRotationFields();
+  if (chore.rotationMembers) {
+    document.querySelectorAll('[name="rotation-member"]').forEach(cb => {
+      cb.checked = chore.rotationMembers.includes(parseInt(cb.value));
+    });
+  }
+
+  updateFrequencyFields();
+  updateRotationFields();
+}
+
+function populateChoreFormDropdowns() {
+  // Assigned to dropdown
+  const assignedSelect = document.getElementById('chore-assigned');
+  const currentVal = assignedSelect.value;
+  assignedSelect.innerHTML = '<option value="">Anyone</option>' +
+    familyMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  assignedSelect.value = currentVal;
+
+  // Rotation members
+  const rotationList = document.getElementById('rotation-members-list');
+  rotationList.innerHTML = familyMembers.map(m =>
+    `<label><input type="checkbox" name="rotation-member" value="${m.id}"> ${escapeHtml(m.name)}</label>`
+  ).join('');
+}
+
+function updateFrequencyFields() {
+  const freq = document.getElementById('chore-frequency').value;
+  document.getElementById('frequency-interval-group').style.display = freq === 'every_x_days' ? '' : 'none';
+  document.getElementById('frequency-weekly-group').style.display = freq === 'weekly' ? '' : 'none';
+  document.getElementById('frequency-monthly-group').style.display = freq === 'monthly' ? '' : 'none';
+}
+
+function updateRotationFields() {
+  const rotation = document.getElementById('chore-rotation').checked;
+  document.getElementById('rotation-members-group').style.display = rotation ? '' : 'none';
+}
+
+function getChoreFormData() {
+  const idStr = document.getElementById('chore-id').value;
+  const existing = idStr ? chores.find(c => c.id === parseInt(idStr)) : null;
+
+  const weeklyDays = [];
+  document.querySelectorAll('[name="weekday"]:checked').forEach(cb => {
+    weeklyDays.push(parseInt(cb.value));
+  });
+
+  const rotationMembers = [];
+  document.querySelectorAll('[name="rotation-member"]:checked').forEach(cb => {
+    rotationMembers.push(parseInt(cb.value));
+  });
+
+  const assignedVal = document.getElementById('chore-assigned').value;
+
+  const data = {
+    title: document.getElementById('chore-title').value.trim(),
+    description: document.getElementById('chore-description').value.trim(),
+    category: document.getElementById('chore-category').value,
+    priority: document.getElementById('chore-priority').value,
+    assignedTo: assignedVal ? parseInt(assignedVal) : null,
+    rotationEnabled: document.getElementById('chore-rotation').checked,
+    rotationMembers: rotationMembers,
+    frequency: document.getElementById('chore-frequency').value,
+    intervalDays: parseInt(document.getElementById('chore-interval').value) || 3,
+    weeklyDays: weeklyDays,
+    monthlyDay: parseInt(document.getElementById('chore-monthly-day').value) || 1,
+    startDate: document.getElementById('chore-start-date').value || toDateStr(today()),
+    preferredTime: document.getElementById('chore-preferred-time').value,
+    slackDays: parseInt(document.getElementById('chore-slack').value) || 0,
+    maxPostpones: parseInt(document.getElementById('chore-max-postpones').value),
+    autoReschedule: document.getElementById('chore-auto-reschedule').checked,
+    snoozeDays: parseInt(document.getElementById('chore-snooze-days').value) || 1,
+    effortLevel: document.getElementById('chore-effort').value,
+    points: parseInt(document.getElementById('chore-points').value) || 0,
+    bonusEarly: document.getElementById('chore-bonus-early').checked,
+    streakBonus: document.getElementById('chore-streak-bonus').checked,
+    notes: document.getElementById('chore-notes').value.trim()
+  };
+
+  if (isNaN(data.maxPostpones)) data.maxPostpones = 3;
+
+  // Preserve existing fields when editing
+  if (existing) {
+    data.id = existing.id;
+    data.status = existing.status;
+    data.completionCount = existing.completionCount;
+    data.currentStreak = existing.currentStreak;
+    data.bestStreak = existing.bestStreak;
+    data.currentPostponeStreak = existing.currentPostponeStreak;
+    data.lastCompleted = existing.lastCompleted;
+    data.rotationIndex = existing.rotationIndex;
+    data.createdAt = existing.createdAt;
+    // Recalculate nextDue if frequency changed
+    if (existing.frequency !== data.frequency || existing.startDate !== data.startDate) {
+      data.nextDue = calculateInitialNextDue(data);
     } else {
-      indexedDBResult.textContent = '⚠️ Please enter a task';
-      indexedDBResult.style.borderColor = '#fbbc04';
+      data.nextDue = existing.nextDue;
     }
-  });
+  }
+
+  return data;
 }
 
-if (clearTasksBtn) {
-  clearTasksBtn.addEventListener('click', () => {
-    if (confirm('Are you sure you want to clear all tasks?')) {
-      clearAllTasks();
-    }
-  });
+function closeChoreModal() {
+  document.getElementById('chore-modal').style.display = 'none';
+  editingChoreId = null;
 }
 
-// Initialize IndexedDB on load
-if ('indexedDB' in window) {
-  initIndexedDB();
-} else {
-  indexedDBResult.textContent = '❌ IndexedDB not supported';
-  indexedDBResult.style.borderColor = '#ea4335';
-  addTaskBtn.disabled = true;
-  clearTasksBtn.disabled = true;
+// ==========================================
+// FAMILY MODAL
+// ==========================================
+
+function openFamilyModal() {
+  document.getElementById('family-modal').style.display = 'flex';
+  document.getElementById('family-modal-title').textContent = 'Add Family Member';
+  document.getElementById('family-delete-btn').style.display = 'none';
+  document.getElementById('family-form').reset();
+  document.getElementById('member-id').value = '';
+  selectedAvatar = AVATARS[0];
+  selectedColor = COLORS[0];
+  renderAvatarPicker();
+  renderColorPicker();
+}
+
+function openEditFamilyModal(memberId) {
+  const member = getMemberById(memberId);
+  if (!member) return;
+
+  document.getElementById('family-modal').style.display = 'flex';
+  document.getElementById('family-modal-title').textContent = 'Edit Family Member';
+  document.getElementById('family-delete-btn').style.display = '';
+  document.getElementById('member-id').value = member.id;
+  document.getElementById('member-name').value = member.name;
+  document.getElementById('member-role').value = member.role;
+  selectedAvatar = member.avatar;
+  selectedColor = member.color;
+  renderAvatarPicker();
+  renderColorPicker();
+}
+
+function closeFamilyModal() {
+  document.getElementById('family-modal').style.display = 'none';
+}
+
+function renderAvatarPicker() {
+  const container = document.getElementById('avatar-picker');
+  container.innerHTML = AVATARS.map(a =>
+    `<div class="avatar-option ${a === selectedAvatar ? 'selected' : ''}" onclick="selectAvatar('${a}')">${a}</div>`
+  ).join('');
+}
+
+function renderColorPicker() {
+  const container = document.getElementById('color-picker');
+  container.innerHTML = COLORS.map(c =>
+    `<div class="color-option ${c === selectedColor ? 'selected' : ''}" style="background:${c}" onclick="selectColor('${c}')"></div>`
+  ).join('');
+}
+
+window.selectAvatar = function(avatar) {
+  selectedAvatar = avatar;
+  renderAvatarPicker();
+};
+
+window.selectColor = function(color) {
+  selectedColor = color;
+  renderColorPicker();
+};
+
+// ==========================================
+// COMPLETE MODAL
+// ==========================================
+
+function openCompleteModal(choreId) {
+  completingChoreId = choreId;
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  document.getElementById('complete-chore-title').textContent = chore.title;
+  document.getElementById('complete-notes').value = '';
+
+  // Populate member dropdown
+  const select = document.getElementById('complete-member');
+  select.innerHTML = '<option value="">-- Select who completed it --</option>' +
+    familyMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+
+  // Pre-select assigned member
+  if (chore.assignedTo) {
+    select.value = chore.assignedTo;
+  }
+
+  document.getElementById('complete-modal').style.display = 'flex';
+}
+
+function closeCompleteModal() {
+  document.getElementById('complete-modal').style.display = 'none';
+  completingChoreId = null;
+}
+
+// ==========================================
+// DETAIL MODAL
+// ==========================================
+
+function openDetailModal(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  document.getElementById('detail-modal-title').textContent = chore.title;
+  document.getElementById('detail-modal-edit').onclick = () => {
+    closeDetailModal();
+    openChoreModal(choreId);
+  };
+
+  const member = chore.assignedTo ? getMemberById(chore.assignedTo) : null;
+  const dueStatus = getDueStatusText(chore);
+  const choreCompletions = completions
+    .filter(c => c.choreId === choreId)
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+    .slice(0, 20);
+
+  const freqLabel = FREQUENCY_LABELS[chore.frequency] || chore.frequency;
+  let freqDetail = freqLabel;
+  if (chore.frequency === 'every_x_days') freqDetail = `Every ${chore.intervalDays} days`;
+  if (chore.frequency === 'weekly') {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    freqDetail = 'Weekly: ' + (chore.weeklyDays || []).map(d => dayNames[d]).join(', ');
+  }
+  if (chore.frequency === 'monthly') freqDetail = `Monthly on day ${chore.monthlyDay}`;
+
+  const body = document.getElementById('detail-modal-body');
+  body.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Overview</div>
+      <div class="detail-grid">
+        <span class="detail-label">Status</span>
+        <span class="detail-value ${dueStatus.cssClass}">${dueStatus.text}</span>
+        <span class="detail-label">Category</span>
+        <span class="detail-value">${CATEGORY_LABELS[chore.category] || chore.category}</span>
+        <span class="detail-label">Priority</span>
+        <span class="detail-value" style="text-transform:capitalize">${chore.priority}</span>
+        <span class="detail-label">Assigned To</span>
+        <span class="detail-value">${member ? escapeHtml(member.name) : 'Anyone'}</span>
+        ${chore.description ? `
+          <span class="detail-label">Description</span>
+          <span class="detail-value">${escapeHtml(chore.description)}</span>
+        ` : ''}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Schedule</div>
+      <div class="detail-grid">
+        <span class="detail-label">Frequency</span>
+        <span class="detail-value">${freqDetail}</span>
+        <span class="detail-label">Next Due</span>
+        <span class="detail-value">${chore.nextDue ? formatDate(chore.nextDue) : 'N/A'}</span>
+        <span class="detail-label">Preferred Time</span>
+        <span class="detail-value" style="text-transform:capitalize">${chore.preferredTime || 'anytime'}</span>
+        <span class="detail-label">Last Completed</span>
+        <span class="detail-value">${chore.lastCompleted ? formatDate(chore.lastCompleted) : 'Never'}</span>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Flexibility</div>
+      <div class="detail-grid">
+        <span class="detail-label">Grace Period</span>
+        <span class="detail-value">${chore.slackDays || 0} day${(chore.slackDays || 0) !== 1 ? 's' : ''}</span>
+        <span class="detail-label">Max Postpones</span>
+        <span class="detail-value">${chore.maxPostpones === -1 ? 'Unlimited' : (chore.maxPostpones === 0 ? 'None' : chore.maxPostpones)}</span>
+        <span class="detail-label">Postpones Used</span>
+        <span class="detail-value">${chore.currentPostponeStreak || 0}</span>
+        <span class="detail-label">Postpone Duration</span>
+        <span class="detail-value">${chore.snoozeDays || 1} day${(chore.snoozeDays || 1) !== 1 ? 's' : ''}</span>
+        <span class="detail-label">Auto-reschedule</span>
+        <span class="detail-value">${chore.autoReschedule !== false ? 'Yes' : 'No'}</span>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Effort & Points</div>
+      <div class="detail-grid">
+        <span class="detail-label">Effort</span>
+        <span class="detail-value">${EFFORT_LABELS[chore.effortLevel] || chore.effortLevel}</span>
+        <span class="detail-label">Points</span>
+        <span class="detail-value">${chore.points || 0}</span>
+        <span class="detail-label">Early Bonus</span>
+        <span class="detail-value">${chore.bonusEarly ? 'Yes (+50%)' : 'No'}</span>
+        <span class="detail-label">Streak Bonus</span>
+        <span class="detail-value">${chore.streakBonus !== false ? 'Yes (+1/streak)' : 'No'}</span>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Stats</div>
+      <div class="detail-grid">
+        <span class="detail-label">Completions</span>
+        <span class="detail-value">${chore.completionCount || 0}</span>
+        <span class="detail-label">Current Streak</span>
+        <span class="detail-value">${chore.currentStreak || 0}</span>
+        <span class="detail-label">Best Streak</span>
+        <span class="detail-value">${chore.bestStreak || 0}</span>
+        ${chore.rotationEnabled ? `
+          <span class="detail-label">Rotation</span>
+          <span class="detail-value">${(chore.rotationMembers || []).map(id => {
+            const m = getMemberById(id);
+            return m ? escapeHtml(m.name) : 'Unknown';
+          }).join(' → ')}</span>
+        ` : ''}
+      </div>
+    </div>
+    ${chore.notes ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Notes</div>
+        <p style="font-size:0.9rem;color:var(--text)">${escapeHtml(chore.notes)}</p>
+      </div>
+    ` : ''}
+    ${choreCompletions.length > 0 ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Recent Completions</div>
+        <div class="detail-history">
+          ${choreCompletions.map(c => {
+            const who = getMemberById(c.completedBy);
+            return `
+              <div class="detail-history-item">
+                <span>${who ? escapeHtml(who.name) : 'Unknown'} ${c.wasOnTime ? '(on time)' : '(late)'}</span>
+                <span>${formatDateTime(c.completedAt)}</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+
+  document.getElementById('detail-modal').style.display = 'flex';
+}
+
+function closeDetailModal() {
+  document.getElementById('detail-modal').style.display = 'none';
+}
+
+// ==========================================
+// DROPDOWN POPULATORS
+// ==========================================
+
+function populateMemberDropdowns() {
+  // Chore filter member dropdown
+  const filterMember = document.getElementById('filter-member');
+  const currentFilter = filterMember.value;
+  filterMember.innerHTML = '<option value="all">All Members</option>' +
+    familyMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  filterMember.value = currentFilter;
+}
+
+// ==========================================
+// UTILITY
+// ==========================================
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Init DB and load data
+  try {
+    await initDB();
+    await loadAllData();
+  } catch (err) {
+    console.error('Failed to initialize database:', err);
+  }
+
+  populateMemberDropdowns();
+  renderCurrentView();
+
+  // Tab navigation
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+
+  // FAB
+  document.getElementById('fab-add').addEventListener('click', () => openChoreModal());
+
+  // Chore modal events
+  document.getElementById('chore-modal-close').addEventListener('click', closeChoreModal);
+  document.getElementById('chore-modal-cancel').addEventListener('click', closeChoreModal);
+  document.getElementById('chore-modal-save').addEventListener('click', async () => {
+    const title = document.getElementById('chore-title').value.trim();
+    if (!title) {
+      alert('Please enter a title for the chore.');
+      return;
+    }
+    const data = getChoreFormData();
+    await saveChore(data);
+    closeChoreModal();
+  });
+  document.getElementById('chore-delete-btn').addEventListener('click', async () => {
+    if (editingChoreId && confirm('Delete this chore? This cannot be undone.')) {
+      await deleteChore(editingChoreId);
+      closeChoreModal();
+    }
+  });
+
+  // Frequency change
+  document.getElementById('chore-frequency').addEventListener('change', updateFrequencyFields);
+  document.getElementById('chore-rotation').addEventListener('change', updateRotationFields);
+
+  // Family modal events
+  document.getElementById('btn-add-member').addEventListener('click', openFamilyModal);
+  document.getElementById('family-modal-close').addEventListener('click', closeFamilyModal);
+  document.getElementById('family-modal-cancel').addEventListener('click', closeFamilyModal);
+  document.getElementById('family-modal-save').addEventListener('click', async () => {
+    const name = document.getElementById('member-name').value.trim();
+    if (!name) {
+      alert('Please enter a name.');
+      return;
+    }
+    const idStr = document.getElementById('member-id').value;
+    const data = {
+      name: name,
+      avatar: selectedAvatar,
+      color: selectedColor,
+      role: document.getElementById('member-role').value
+    };
+    if (idStr) {
+      data.id = parseInt(idStr);
+      const existing = getMemberById(data.id);
+      if (existing) data.createdAt = existing.createdAt;
+    }
+    await saveFamilyMember(data);
+    closeFamilyModal();
+  });
+  document.getElementById('family-delete-btn').addEventListener('click', async () => {
+    const idStr = document.getElementById('member-id').value;
+    if (idStr && confirm('Delete this family member?')) {
+      await deleteFamilyMember(parseInt(idStr));
+      closeFamilyModal();
+    }
+  });
+
+  // Complete modal events
+  document.getElementById('complete-modal-close').addEventListener('click', closeCompleteModal);
+  document.getElementById('complete-modal-cancel').addEventListener('click', closeCompleteModal);
+  document.getElementById('complete-modal-save').addEventListener('click', async () => {
+    const memberVal = document.getElementById('complete-member').value;
+    if (!memberVal) {
+      alert('Please select who completed this chore.');
+      return;
+    }
+    const notes = document.getElementById('complete-notes').value.trim();
+    await completeChore(completingChoreId, parseInt(memberVal), notes);
+    closeCompleteModal();
+  });
+
+  // Detail modal events
+  document.getElementById('detail-modal-close').addEventListener('click', closeDetailModal);
+  document.getElementById('detail-modal-ok').addEventListener('click', closeDetailModal);
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.style.display = 'none';
+      }
+    });
+  });
+
+  // Filters
+  document.getElementById('filter-status').addEventListener('change', renderChoresList);
+  document.getElementById('filter-member').addEventListener('change', renderChoresList);
+  document.getElementById('filter-category').addEventListener('change', renderChoresList);
+  document.getElementById('filter-priority').addEventListener('change', renderChoresList);
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.register('./service-worker.js');
+      console.log('Service Worker registered:', reg.scope);
+    } catch (err) {
+      console.error('Service Worker registration failed:', err);
+    }
+  }
+
+  // PWA install
+  let deferredPrompt;
+  const installBtn = document.getElementById('install-btn');
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn) installBtn.style.display = '';
+  });
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+      }
+    });
+  }
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    if (installBtn) installBtn.style.display = 'none';
+  });
+});
+
+// Expose functions needed by onclick handlers in rendered HTML
+window.openCompleteModal = openCompleteModal;
+window.postponeChore = postponeChore;
+window.togglePauseChore = togglePauseChore;
+window.openDetailModal = openDetailModal;
+window.openEditFamilyModal = openEditFamilyModal;
+window.openChoreModal = openChoreModal;
+
+// ==========================================
+// EDIT FAMILY MODAL (exposed globally)
+// ==========================================
+
+function openEditFamilyModal(memberId) {
+  const member = getMemberById(memberId);
+  if (!member) return;
+
+  document.getElementById('family-modal').style.display = 'flex';
+  document.getElementById('family-modal-title').textContent = 'Edit Family Member';
+  document.getElementById('family-delete-btn').style.display = '';
+  document.getElementById('member-id').value = member.id;
+  document.getElementById('member-name').value = member.name;
+  document.getElementById('member-role').value = member.role;
+  selectedAvatar = member.avatar;
+  selectedColor = member.color;
+  renderAvatarPicker();
+  renderColorPicker();
 }

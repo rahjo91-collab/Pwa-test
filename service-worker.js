@@ -86,11 +86,11 @@ self.addEventListener('push', (event) => {
   console.log('Push notification received:', event);
 
   let notificationData = {
-    title: 'PWA Notification',
-    body: 'You have a new notification!',
+    title: 'Family Dashboard',
+    body: 'You have chores to do!',
     icon: './icon-192x192.png',
     badge: './icon-192x192.png',
-    tag: 'pwa-notification',
+    tag: 'family-dashboard-notification',
     requireInteraction: false
   };
 

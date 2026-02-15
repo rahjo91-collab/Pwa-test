@@ -1,7 +1,7 @@
 {
-  "name": "PWA Application",
-  "short_name": "PWA App",
-  "description": "A Progressive Web Application",
+  "name": "Family Dashboard",
+  "short_name": "Family",
+  "description": "Shared family chores and todo dashboard",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
