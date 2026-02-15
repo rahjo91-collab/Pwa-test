@@ -1,3 +1,11 @@
+// Display dynamic version from generated version.js
+(function setVersion() {
+  const el = document.getElementById('app-version');
+  if (el && typeof APP_VERSION_DISPLAY !== 'undefined') {
+    el.textContent = APP_VERSION_DISPLAY;
+  }
+})();
+
 // Register Service Worker
 let swRegistration = null;
 
