@@ -584,6 +584,7 @@ function renderCurrentView() {
     case 'dashboard': renderDashboard(); break;
     case 'chores': renderChoresList(); break;
     case 'family': renderFamilyView(); break;
+    case 'dev': renderDevView(); break;
   }
 }
 
@@ -1468,3 +1469,721 @@ function openEditFamilyModal(memberId) {
   renderAvatarPicker();
   renderColorPicker();
 }
+
+// ==========================================
+// DEV TOOLS
+// ==========================================
+
+function devLog(msg, level) {
+  level = level || 'info';
+  const el = document.getElementById('dev-log-content');
+  if (!el) return;
+  const ts = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const cls = 'log-' + level;
+  el.innerHTML += '\n<span class="' + cls + '">[' + ts + '] ' + escapeHtml(msg) + '</span>';
+  el.scrollTop = el.scrollHeight;
+}
+
+window.devClearLog = function() {
+  const el = document.getElementById('dev-log-content');
+  if (el) el.innerHTML = 'Log cleared.';
+};
+
+// --- Dev View Render ---
+
+function renderDevView() {
+  devRefreshStats();
+  devUpdateNotifStatus();
+}
+
+window.devRefreshStats = function() {
+  const container = document.getElementById('dev-stats');
+  if (!container) return;
+
+  const activeChores = chores.filter(c => c.status === 'active').length;
+  const pausedChores = chores.filter(c => c.status === 'paused').length;
+  const completedChores = chores.filter(c => c.status === 'completed').length;
+  const overdueCount = chores.filter(c => getChoreStatus(c) === 'overdue').length;
+  const graceCount = chores.filter(c => getChoreStatus(c) === 'grace-period').length;
+  const todayCount = chores.filter(c => getChoreStatus(c) === 'due-today').length;
+
+  container.innerHTML = [
+    { n: familyMembers.length, l: 'Family Members' },
+    { n: chores.length, l: 'Total Chores' },
+    { n: activeChores, l: 'Active' },
+    { n: pausedChores, l: 'Paused' },
+    { n: completedChores, l: 'One-Time Done' },
+    { n: overdueCount, l: 'Overdue' },
+    { n: graceCount, l: 'Grace Period' },
+    { n: todayCount, l: 'Due Today' },
+    { n: completions.length, l: 'Completions' }
+  ].map(s =>
+    '<div class="dev-stat-card"><div class="dev-stat-number">' + s.n + '</div><div class="dev-stat-label">' + s.l + '</div></div>'
+  ).join('');
+};
+
+function devUpdateNotifStatus() {
+  const el = document.getElementById('dev-notif-status');
+  if (!el) return;
+  if (!('Notification' in window)) {
+    el.className = 'dev-notif-status dev-notif-denied';
+    el.textContent = 'Notifications not supported in this browser.';
+    return;
+  }
+  const perm = Notification.permission;
+  el.className = 'dev-notif-status dev-notif-' + perm;
+  const labels = { granted: 'Granted - notifications will show', denied: 'Denied - user blocked notifications', 'default': 'Not yet asked - click Request Permission' };
+  el.textContent = 'Permission: ' + perm + ' - ' + (labels[perm] || perm);
+}
+
+// --- Sample Data ---
+
+const SAMPLE_FAMILY = [
+  { name: 'Mum', avatar: '\u{1F469}', color: '#e91e63', role: 'parent' },
+  { name: 'Dad', avatar: '\u{1F468}', color: '#4285f4', role: 'parent' },
+  { name: 'Alex', avatar: '\u{1F466}', color: '#34a853', role: 'child' },
+  { name: 'Sophie', avatar: '\u{1F467}', color: '#9c27b0', role: 'child' }
+];
+
+const SAMPLE_CHORES = [
+  { title: 'Wash dishes', category: 'kitchen', frequency: 'daily', priority: 'high', effort: 'medium', points: 15, preferredTime: 'evening', slackDays: 0, desc: 'Wash all dishes and wipe down counters' },
+  { title: 'Take out bins', category: 'kitchen', frequency: 'weekly', priority: 'high', effort: 'quick', points: 10, weeklyDays: [2, 5], slackDays: 0, desc: 'All bins to the curb before 7am' },
+  { title: 'Hoover living room', category: 'living_room', frequency: 'every_x_days', priority: 'medium', effort: 'medium', points: 15, intervalDays: 3, slackDays: 1 },
+  { title: 'Clean bathroom', category: 'bathroom', frequency: 'weekly', priority: 'high', effort: 'long', points: 25, weeklyDays: [6], slackDays: 1, desc: 'Toilet, sink, shower, floor, mirror' },
+  { title: 'Do laundry', category: 'laundry', frequency: 'every_x_days', priority: 'medium', effort: 'medium', points: 15, intervalDays: 2, slackDays: 1 },
+  { title: 'Water garden plants', category: 'garden', frequency: 'every_x_days', priority: 'medium', effort: 'quick', points: 8, intervalDays: 2, slackDays: 2, preferredTime: 'morning' },
+  { title: 'Feed the cat', category: 'pets', frequency: 'daily', priority: 'critical', effort: 'quick', points: 5, slackDays: 0, preferredTime: 'morning', desc: 'Wet food in morning, dry food top-up' },
+  { title: 'Weekly food shop', category: 'shopping', frequency: 'weekly', priority: 'high', effort: 'long', points: 30, weeklyDays: [6], slackDays: 1 },
+  { title: 'Tidy bedrooms', category: 'bedroom', frequency: 'weekly', priority: 'low', effort: 'medium', points: 12, weeklyDays: [0], slackDays: 2 },
+  { title: 'Mop kitchen floor', category: 'kitchen', frequency: 'weekly', priority: 'medium', effort: 'medium', points: 15, weeklyDays: [3], slackDays: 1 },
+  { title: 'Change bed sheets', category: 'bedroom', frequency: 'biweekly', priority: 'medium', effort: 'medium', points: 20, slackDays: 3 },
+  { title: 'Clean fridge', category: 'kitchen', frequency: 'monthly', priority: 'low', effort: 'long', points: 25, monthlyDay: 1, slackDays: 5 },
+  { title: 'Mow the lawn', category: 'garden', frequency: 'biweekly', priority: 'low', effort: 'long', points: 30, slackDays: 3, preferredTime: 'afternoon' },
+  { title: 'Wipe kitchen surfaces', category: 'kitchen', frequency: 'daily', priority: 'medium', effort: 'quick', points: 5, slackDays: 0, preferredTime: 'evening' },
+  { title: 'Sort recycling', category: 'general', frequency: 'weekly', priority: 'medium', effort: 'quick', points: 8, weeklyDays: [1], slackDays: 1 }
+];
+
+const RANDOM_CHORE_NAMES = [
+  'Dust shelves', 'Organise cupboard', 'Clean windows', 'Empty dishwasher',
+  'Descale kettle', 'Wipe light switches', 'Clean oven', 'Wash car',
+  'Sweep patio', 'Trim hedges', 'Iron clothes', 'Fold laundry',
+  'Scrub shower tiles', 'Clean microwave', 'Organise garage',
+  'Polish furniture', 'Vacuum stairs', 'Clear gutters', 'Fix squeaky door',
+  'Deep clean carpet', 'Organise fridge', 'Clean BBQ', 'Wash windows outside',
+  'Tidy garden shed', 'Repot plants', 'Clean pet bowl', 'Walk the dog',
+  'Brush the cat', 'Take out compost', 'Check smoke alarms',
+  'Wipe skirting boards', 'Clean doorstep', 'Tidy porch', 'Clear junk drawer',
+  'Sharpen kitchen knives', 'Clean under sofa', 'Wash curtains',
+  'Check tyre pressure', 'Backup computer files', 'Update family calendar'
+];
+
+// --- Seed Functions ---
+
+window.devSeedFamily = async function() {
+  devLog('Seeding sample family members...');
+  let added = 0;
+  for (const m of SAMPLE_FAMILY) {
+    const exists = familyMembers.find(f => f.name === m.name);
+    if (!exists) {
+      await saveFamilyMember({ name: m.name, avatar: m.avatar, color: m.color, role: m.role });
+      added++;
+    }
+  }
+  await loadAllData();
+  populateMemberDropdowns();
+  renderCurrentView();
+  devLog('Added ' + added + ' family members (' + (SAMPLE_FAMILY.length - added) + ' already existed).', 'success');
+};
+
+window.devSeedChores = async function() {
+  devLog('Seeding sample chores...');
+  const memberIds = familyMembers.map(m => m.id);
+  let count = 0;
+
+  for (const sc of SAMPLE_CHORES) {
+    const choreData = {
+      title: sc.title,
+      description: sc.desc || '',
+      category: sc.category,
+      priority: sc.priority,
+      assignedTo: memberIds.length > 0 ? memberIds[count % memberIds.length] : null,
+      rotationEnabled: false,
+      rotationMembers: [],
+      frequency: sc.frequency,
+      intervalDays: sc.intervalDays || 3,
+      weeklyDays: sc.weeklyDays || [1],
+      monthlyDay: sc.monthlyDay || 1,
+      startDate: toDateStr(today()),
+      preferredTime: sc.preferredTime || 'anytime',
+      slackDays: sc.slackDays !== undefined ? sc.slackDays : 1,
+      maxPostpones: 3,
+      autoReschedule: true,
+      snoozeDays: 1,
+      effortLevel: sc.effort || 'medium',
+      points: sc.points || 10,
+      bonusEarly: count % 3 === 0,
+      streakBonus: true,
+      notes: ''
+    };
+    await saveChore(choreData);
+    count++;
+  }
+
+  devLog('Added ' + count + ' sample chores.', 'success');
+};
+
+window.devSeedAll = async function() {
+  await window.devSeedFamily();
+  await window.devSeedChores();
+  devLog('Full seed complete!', 'success');
+};
+
+// --- Bulk Chore Generation ---
+
+function randomPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+window.devAddRandomChores = async function(count) {
+  devLog('Generating ' + count + ' random chores...');
+  const categories = Object.keys(CATEGORY_LABELS);
+  const priorities = ['low', 'medium', 'high', 'critical'];
+  const efforts = ['quick', 'medium', 'long'];
+  const frequencies = ['daily', 'every_x_days', 'weekly', 'biweekly', 'monthly', 'once'];
+  const times = ['anytime', 'morning', 'afternoon', 'evening'];
+  const memberIds = familyMembers.map(m => m.id);
+  const usedNames = new Set(chores.map(c => c.title));
+
+  let added = 0;
+  for (let i = 0; i < count; i++) {
+    let name = randomPick(RANDOM_CHORE_NAMES);
+    // Avoid duplicates by appending a number
+    if (usedNames.has(name)) name = name + ' #' + randomInt(2, 99);
+    usedNames.add(name);
+
+    const freq = randomPick(frequencies);
+    const choreData = {
+      title: name,
+      description: '',
+      category: randomPick(categories),
+      priority: randomPick(priorities),
+      assignedTo: memberIds.length > 0 ? randomPick(memberIds) : null,
+      rotationEnabled: false,
+      rotationMembers: [],
+      frequency: freq,
+      intervalDays: randomInt(2, 7),
+      weeklyDays: freq === 'weekly' ? [randomInt(0, 6)] : [1],
+      monthlyDay: randomInt(1, 28),
+      startDate: toDateStr(today()),
+      preferredTime: randomPick(times),
+      slackDays: randomInt(0, 3),
+      maxPostpones: randomPick([-1, 0, 1, 3, 5]),
+      autoReschedule: Math.random() > 0.3,
+      snoozeDays: randomPick([1, 1, 1, 2, 3]),
+      effortLevel: randomPick(efforts),
+      points: randomPick([5, 8, 10, 12, 15, 20, 25, 30]),
+      bonusEarly: Math.random() > 0.6,
+      streakBonus: Math.random() > 0.3,
+      notes: ''
+    };
+    await saveChore(choreData);
+    added++;
+  }
+
+  devLog('Added ' + added + ' random chores.', 'success');
+};
+
+window.devAddOverdueChores = async function(count) {
+  devLog('Adding ' + count + ' overdue chores...');
+  const categories = Object.keys(CATEGORY_LABELS);
+  const memberIds = familyMembers.map(m => m.id);
+  let added = 0;
+
+  for (let i = 0; i < count; i++) {
+    const daysAgo = randomInt(3, 14);
+    const dueDate = new Date(today());
+    dueDate.setDate(dueDate.getDate() - daysAgo);
+
+    const choreData = {
+      title: 'Overdue: ' + randomPick(RANDOM_CHORE_NAMES),
+      description: 'Test overdue chore, ' + daysAgo + ' days late',
+      category: randomPick(categories),
+      priority: randomPick(['high', 'critical']),
+      assignedTo: memberIds.length > 0 ? randomPick(memberIds) : null,
+      rotationEnabled: false, rotationMembers: [],
+      frequency: 'daily',
+      intervalDays: 3, weeklyDays: [1], monthlyDay: 1,
+      startDate: toDateStr(dueDate),
+      preferredTime: 'anytime',
+      slackDays: Math.max(0, daysAgo - randomInt(3, 5)),
+      maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
+      effortLevel: 'medium', points: 15,
+      bonusEarly: false, streakBonus: true, notes: ''
+    };
+
+    // We need to manually set nextDue to be in the past
+    choreData.createdAt = new Date().toISOString();
+    choreData.updatedAt = new Date().toISOString();
+    choreData.completionCount = 0;
+    choreData.currentStreak = 0;
+    choreData.bestStreak = 0;
+    choreData.currentPostponeStreak = 0;
+    choreData.lastCompleted = null;
+    choreData.status = 'active';
+    choreData.rotationIndex = 0;
+    choreData.nextDue = toDateStr(dueDate);
+    await dbAdd('chores', choreData);
+    added++;
+  }
+
+  await loadAllData();
+  renderCurrentView();
+  devLog('Added ' + added + ' overdue chores.', 'success');
+};
+
+window.devAddTodayChores = async function(count) {
+  devLog('Adding ' + count + ' due-today chores...');
+  const categories = Object.keys(CATEGORY_LABELS);
+  const memberIds = familyMembers.map(m => m.id);
+  let added = 0;
+
+  for (let i = 0; i < count; i++) {
+    const choreData = {
+      title: 'Today: ' + randomPick(RANDOM_CHORE_NAMES),
+      description: 'Test chore due today',
+      category: randomPick(categories),
+      priority: randomPick(['medium', 'high']),
+      assignedTo: memberIds.length > 0 ? randomPick(memberIds) : null,
+      rotationEnabled: false, rotationMembers: [],
+      frequency: 'daily',
+      intervalDays: 3, weeklyDays: [1], monthlyDay: 1,
+      startDate: toDateStr(today()),
+      preferredTime: randomPick(['morning', 'afternoon', 'evening']),
+      slackDays: 1, maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
+      effortLevel: randomPick(['quick', 'medium']), points: 10,
+      bonusEarly: false, streakBonus: true, notes: ''
+    };
+    await saveChore(choreData);
+    added++;
+  }
+
+  devLog('Added ' + added + ' due-today chores.', 'success');
+};
+
+window.devAddGracePeriodChores = async function(count) {
+  devLog('Adding ' + count + ' grace-period chores...');
+  const categories = Object.keys(CATEGORY_LABELS);
+  const memberIds = familyMembers.map(m => m.id);
+  let added = 0;
+
+  for (let i = 0; i < count; i++) {
+    const slackDays = randomInt(2, 5);
+    const daysLate = randomInt(1, slackDays);
+    const dueDate = new Date(today());
+    dueDate.setDate(dueDate.getDate() - daysLate);
+
+    const choreData = {
+      title: 'Grace: ' + randomPick(RANDOM_CHORE_NAMES),
+      description: 'Test grace period chore, ' + daysLate + 'd late with ' + slackDays + 'd slack',
+      category: randomPick(categories),
+      priority: 'medium',
+      assignedTo: memberIds.length > 0 ? randomPick(memberIds) : null,
+      rotationEnabled: false, rotationMembers: [],
+      frequency: 'daily',
+      intervalDays: 3, weeklyDays: [1], monthlyDay: 1,
+      startDate: toDateStr(dueDate),
+      preferredTime: 'anytime',
+      slackDays: slackDays,
+      maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
+      effortLevel: 'medium', points: 12,
+      bonusEarly: false, streakBonus: true, notes: ''
+    };
+
+    choreData.createdAt = new Date().toISOString();
+    choreData.updatedAt = new Date().toISOString();
+    choreData.completionCount = 0;
+    choreData.currentStreak = 0;
+    choreData.bestStreak = 0;
+    choreData.currentPostponeStreak = 0;
+    choreData.lastCompleted = null;
+    choreData.status = 'active';
+    choreData.rotationIndex = 0;
+    choreData.nextDue = toDateStr(dueDate);
+    await dbAdd('chores', choreData);
+    added++;
+  }
+
+  await loadAllData();
+  renderCurrentView();
+  devLog('Added ' + added + ' grace-period chores.', 'success');
+};
+
+// --- Simulate Activity ---
+
+window.devSimulateCompletions = async function(count) {
+  if (familyMembers.length === 0) {
+    devLog('No family members! Seed family first.', 'error');
+    return;
+  }
+  if (chores.length === 0) {
+    devLog('No chores! Seed chores first.', 'error');
+    return;
+  }
+
+  devLog('Simulating ' + count + ' completions...');
+  const memberIds = familyMembers.map(m => m.id);
+  const activeChores = chores.filter(c => c.status === 'active');
+  if (activeChores.length === 0) {
+    devLog('No active chores to complete!', 'warn');
+    return;
+  }
+
+  let added = 0;
+  for (let i = 0; i < count; i++) {
+    const chore = randomPick(activeChores);
+    const memberId = randomPick(memberIds);
+    const daysAgo = randomInt(0, 6);
+    const completedDate = new Date();
+    completedDate.setDate(completedDate.getDate() - daysAgo);
+    completedDate.setHours(randomInt(7, 21), randomInt(0, 59), 0, 0);
+
+    const wasOnTime = Math.random() > 0.3;
+    const pts = calculatePoints(chore, wasOnTime);
+
+    const completion = {
+      choreId: chore.id,
+      completedBy: memberId,
+      completedAt: completedDate.toISOString(),
+      scheduledFor: chore.nextDue || toDateStr(completedDate),
+      wasOnTime: wasOnTime,
+      wasPostponed: Math.random() > 0.7,
+      postponeCount: wasOnTime ? 0 : randomInt(1, 3),
+      notes: '',
+      pointsAwarded: pts
+    };
+    await dbAdd('completions', completion);
+    added++;
+  }
+
+  await loadAllData();
+  renderCurrentView();
+  devLog('Added ' + added + ' simulated completions.', 'success');
+};
+
+window.devCompleteAllToday = async function() {
+  if (familyMembers.length === 0) {
+    devLog('No family members! Seed family first.', 'error');
+    return;
+  }
+
+  const todayChores = chores.filter(c => {
+    const s = getChoreStatus(c);
+    return s === 'due-today' || s === 'grace-period' || s === 'overdue';
+  });
+
+  if (todayChores.length === 0) {
+    devLog('No chores due today/overdue to complete.', 'warn');
+    return;
+  }
+
+  devLog('Completing ' + todayChores.length + ' chores...');
+  const memberIds = familyMembers.map(m => m.id);
+
+  for (const chore of todayChores) {
+    const memberId = chore.assignedTo || randomPick(memberIds);
+    await completeChore(chore.id, memberId, 'Auto-completed by dev tools');
+  }
+
+  devLog('Completed ' + todayChores.length + ' chores!', 'success');
+};
+
+window.devPostponeAllToday = async function() {
+  const todayChores = chores.filter(c => {
+    const s = getChoreStatus(c);
+    return s === 'due-today' || s === 'grace-period';
+  });
+
+  if (todayChores.length === 0) {
+    devLog('No chores due today to postpone.', 'warn');
+    return;
+  }
+
+  devLog('Postponing ' + todayChores.length + ' chores...');
+  for (const chore of todayChores) {
+    await postponeChore(chore.id);
+  }
+  devLog('Postponed ' + todayChores.length + ' chores.', 'success');
+};
+
+// --- Notifications ---
+
+window.devRequestNotifPermission = async function() {
+  if (!('Notification' in window)) {
+    devLog('Notification API not supported in this browser.', 'error');
+    return;
+  }
+  devLog('Requesting notification permission...');
+  const perm = await Notification.requestPermission();
+  devLog('Permission result: ' + perm, perm === 'granted' ? 'success' : 'warn');
+  devUpdateNotifStatus();
+};
+
+window.devFireBasicNotif = function() {
+  if (!checkNotifPermission()) return;
+  devLog('Firing basic notification...');
+  new Notification('Family Dashboard', {
+    body: 'This is a test notification from the dev tools!',
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
+    tag: 'dev-test-basic'
+  });
+  devLog('Basic notification fired.', 'success');
+};
+
+window.devFireChoreReminder = function() {
+  if (!checkNotifPermission()) return;
+
+  const activeChores = chores.filter(c => c.status === 'active');
+  let choreTitle = 'Wash the dishes';
+  let assigned = 'everyone';
+  if (activeChores.length > 0) {
+    const c = randomPick(activeChores);
+    choreTitle = c.title;
+    const m = c.assignedTo ? getMemberById(c.assignedTo) : null;
+    assigned = m ? m.name : 'everyone';
+  }
+
+  devLog('Firing chore reminder notification...');
+  new Notification('Chore Reminder', {
+    body: choreTitle + ' is due today! Assigned to ' + assigned + '.',
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
+    tag: 'chore-reminder-' + Date.now(),
+    vibrate: [200, 100, 200],
+    requireInteraction: false
+  });
+  devLog('Chore reminder fired for: ' + choreTitle, 'success');
+};
+
+window.devFireOverdueAlert = function() {
+  if (!checkNotifPermission()) return;
+
+  const overdueChores = chores.filter(c => getChoreStatus(c) === 'overdue');
+  let body = 'You have overdue chores! Time to get on top of things.';
+  if (overdueChores.length > 0) {
+    const names = overdueChores.slice(0, 3).map(c => c.title).join(', ');
+    body = overdueChores.length + ' chore(s) overdue: ' + names;
+    if (overdueChores.length > 3) body += ' and ' + (overdueChores.length - 3) + ' more';
+  }
+
+  devLog('Firing overdue alert...');
+  new Notification('Overdue Alert!', {
+    body: body,
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
+    tag: 'overdue-alert-' + Date.now(),
+    vibrate: [300, 100, 300, 100, 300],
+    requireInteraction: true
+  });
+  devLog('Overdue alert fired.', 'success');
+};
+
+window.devFireSWNotif = async function() {
+  if (!('serviceWorker' in navigator)) {
+    devLog('Service Worker not supported.', 'error');
+    return;
+  }
+  if (!checkNotifPermission()) return;
+
+  devLog('Firing notification via Service Worker...');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification('Family Dashboard (via SW)', {
+      body: 'This notification came through the Service Worker!',
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: 'dev-sw-test-' + Date.now(),
+      vibrate: [200, 100, 200],
+      actions: [
+        { action: 'open', title: 'Open App' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
+    });
+    devLog('Service Worker notification fired.', 'success');
+  } catch (err) {
+    devLog('SW notification failed: ' + err.message, 'error');
+  }
+};
+
+window.devFireCustomNotif = function() {
+  if (!checkNotifPermission()) return;
+
+  const title = document.getElementById('dev-notif-title').value || 'Test';
+  const body = document.getElementById('dev-notif-body').value || 'Test body';
+  const tag = document.getElementById('dev-notif-tag').value || 'test';
+  const requireInteraction = document.getElementById('dev-notif-require-interaction').checked;
+  const vibrate = document.getElementById('dev-notif-vibrate').checked;
+
+  devLog('Firing custom notification: "' + title + '"...');
+  new Notification(title, {
+    body: body,
+    icon: './icon-192x192.png',
+    badge: './icon-192x192.png',
+    tag: tag + '-' + Date.now(),
+    requireInteraction: requireInteraction,
+    vibrate: vibrate ? [200, 100, 200] : undefined
+  });
+  devLog('Custom notification fired.', 'success');
+};
+
+window.devFireCustomViaSW = async function() {
+  if (!('serviceWorker' in navigator)) {
+    devLog('Service Worker not supported.', 'error');
+    return;
+  }
+  if (!checkNotifPermission()) return;
+
+  const title = document.getElementById('dev-notif-title').value || 'Test';
+  const body = document.getElementById('dev-notif-body').value || 'Test body';
+  const tag = document.getElementById('dev-notif-tag').value || 'test';
+  const requireInteraction = document.getElementById('dev-notif-require-interaction').checked;
+  const vibrate = document.getElementById('dev-notif-vibrate').checked;
+
+  devLog('Firing custom notification via SW: "' + title + '"...');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, {
+      body: body,
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: tag + '-sw-' + Date.now(),
+      requireInteraction: requireInteraction,
+      vibrate: vibrate ? [200, 100, 200] : undefined,
+      actions: [
+        { action: 'open', title: 'Open App' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
+    });
+    devLog('Custom SW notification fired.', 'success');
+  } catch (err) {
+    devLog('Custom SW notification failed: ' + err.message, 'error');
+  }
+};
+
+window.devFireNotifBurst = async function(count) {
+  if (!checkNotifPermission()) return;
+  devLog('Firing burst of ' + count + ' notifications...');
+
+  const messages = [
+    'Wash dishes is overdue!', 'Take out bins - due today',
+    'Hoover the living room', 'Feed the cat NOW!',
+    'Weekly shop reminder', 'Time to mop the floor',
+    'Laundry needs doing', 'Water the garden plants',
+    'Clean the bathroom', 'Tidy your bedroom'
+  ];
+
+  for (let i = 0; i < count; i++) {
+    const msg = messages[i % messages.length];
+    const delay = i * 800; // stagger by 800ms
+
+    setTimeout(() => {
+      new Notification('Family Dashboard', {
+        body: '(' + (i + 1) + '/' + count + ') ' + msg,
+        icon: './icon-192x192.png',
+        tag: 'burst-' + Date.now() + '-' + i,
+        vibrate: [100]
+      });
+    }, delay);
+  }
+
+  devLog('Burst scheduled: ' + count + ' notifications over ' + ((count * 800) / 1000).toFixed(1) + 's.', 'success');
+};
+
+function checkNotifPermission() {
+  if (!('Notification' in window)) {
+    devLog('Notification API not supported.', 'error');
+    return false;
+  }
+  if (Notification.permission !== 'granted') {
+    devLog('Permission not granted. Current: ' + Notification.permission + '. Click "Request Permission" first.', 'warn');
+    return false;
+  }
+  return true;
+}
+
+// --- Data Management ---
+
+function devClearStore(storeName, label) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([storeName], 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.clear();
+    request.onsuccess = () => {
+      devLog('Cleared all ' + label + '.', 'success');
+      resolve();
+    };
+    request.onerror = () => {
+      devLog('Failed to clear ' + label + ': ' + request.error, 'error');
+      reject(request.error);
+    };
+  });
+}
+
+window.devClearChores = async function() {
+  if (!confirm('Clear ALL chores? This cannot be undone.')) return;
+  await devClearStore('chores', 'chores');
+  await loadAllData();
+  renderCurrentView();
+};
+
+window.devClearCompletions = async function() {
+  if (!confirm('Clear ALL completion history?')) return;
+  await devClearStore('completions', 'completions');
+  await loadAllData();
+  renderCurrentView();
+};
+
+window.devClearFamily = async function() {
+  if (!confirm('Clear ALL family members?')) return;
+  await devClearStore('familyMembers', 'family members');
+  await loadAllData();
+  populateMemberDropdowns();
+  renderCurrentView();
+};
+
+window.devNuclearReset = async function() {
+  if (!confirm('NUCLEAR RESET: Delete ALL data (chores, completions, family members)? This CANNOT be undone!')) return;
+  if (!confirm('Are you really sure? Everything will be gone.')) return;
+
+  await devClearStore('chores', 'chores');
+  await devClearStore('completions', 'completions');
+  await devClearStore('familyMembers', 'family members');
+  await loadAllData();
+  populateMemberDropdowns();
+  renderCurrentView();
+  devLog('Nuclear reset complete. All data wiped.', 'warn');
+};
+
+window.devExportJSON = function() {
+  const data = {
+    exportedAt: new Date().toISOString(),
+    familyMembers: familyMembers,
+    chores: chores,
+    completions: completions
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'family-dashboard-export-' + toDateStr(today()) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  devLog('Exported ' + familyMembers.length + ' members, ' + chores.length + ' chores, ' + completions.length + ' completions.', 'success');
+};
