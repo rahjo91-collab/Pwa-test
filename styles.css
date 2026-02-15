@@ -1266,9 +1266,69 @@ button:disabled {
 }
 
 .dev-custom-notif input,
-.dev-custom-notif select {
+.dev-custom-notif select,
+.dev-custom-notif textarea {
     padding: 8px 10px;
     font-size: 0.85rem;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.dev-custom-notif textarea {
+    resize: vertical;
+    font-family: inherit;
+}
+
+.dev-custom-notif label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+    font-weight: 500;
+}
+
+.dev-custom-notif .form-row {
+    display: flex;
+    gap: 8px;
+}
+
+.dev-custom-notif .form-row .form-group {
+    flex: 1;
+}
+
+.dev-subsection-title {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 12px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dev-scheduled-list {
+    margin-top: 8px;
+    font-size: 0.8rem;
+}
+
+.dev-scheduled-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+
+.dev-scheduled-item .dev-sched-label {
+    color: var(--text-secondary);
+}
+
+.dev-scheduled-item .dev-sched-countdown {
+    font-family: monospace;
+    color: var(--primary);
+    font-weight: 600;
 }
 
 /* ==========================================

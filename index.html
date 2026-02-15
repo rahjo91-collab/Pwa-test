@@ -213,32 +213,85 @@
                 <!-- Notifications -->
                 <div class="dev-section">
                     <h4 class="dev-section-title">Notifications</h4>
-                    <p class="dev-desc">Test notifications. You must grant permission first.</p>
+                    <p class="dev-desc">Test notifications. You must grant permission first. Android supports up to 2 action buttons.</p>
                     <div id="dev-notif-status" class="dev-notif-status"></div>
                     <div class="dev-btn-grid">
                         <button class="dev-btn dev-btn-orange" onclick="devRequestNotifPermission()">Request Permission</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireBasicNotif()">Fire Basic Notification</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireChoreReminder()">Fire Chore Reminder</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireOverdueAlert()">Fire Overdue Alert</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireSWNotif()">Fire via Service Worker</button>
                     </div>
-                    <!-- Custom notification -->
+
+                    <!-- Quick-fire presets -->
+                    <h5 class="dev-subsection-title">Quick Presets</h5>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-orange" onclick="devFireBasicNotif()">Basic</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireChoreReminder()">Chore Reminder</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireOverdueAlert()">Overdue Alert</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireSWNotif()">Via SW</button>
+                    </div>
+
+                    <!-- Custom Notification Builder -->
                     <div class="dev-custom-notif">
-                        <h5>Custom Notification</h5>
+                        <h5>Custom Notification Builder</h5>
+
                         <div class="form-group">
+                            <label>Title</label>
                             <input type="text" id="dev-notif-title" placeholder="Title" value="Family Dashboard">
                         </div>
                         <div class="form-group">
-                            <input type="text" id="dev-notif-body" placeholder="Body" value="Time to do your chores!">
+                            <label>Body</label>
+                            <textarea id="dev-notif-body" rows="2" placeholder="Notification body text">Time to do your chores!</textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tag (grouping)</label>
+                                <select id="dev-notif-tag">
+                                    <option value="test">test</option>
+                                    <option value="chore-reminder">chore-reminder</option>
+                                    <option value="overdue-alert">overdue-alert</option>
+                                    <option value="weekly-summary">weekly-summary</option>
+                                    <option value="custom">custom (unique)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Linked Chore</label>
+                                <select id="dev-notif-chore">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="form-group">
+                            <label>Action Button 1</label>
+                            <div class="form-row">
+                                <select id="dev-notif-action1">
+                                    <option value="">None</option>
+                                    <option value="complete" selected>complete (Mark Done)</option>
+                                    <option value="view">view (View Chore)</option>
+                                    <option value="postpone">postpone (Postpone)</option>
+                                    <option value="open">open (Open App)</option>
+                                    <option value="view-overdue">view-overdue (View Overdue)</option>
+                                    <option value="dismiss">dismiss (Dismiss)</option>
+                                </select>
+                                <input type="text" id="dev-notif-action1-label" placeholder="Button label" value="Mark Done">
+                            </div>
                         </div>
                         <div class="form-group">
-                            <select id="dev-notif-tag">
-                                <option value="test">Tag: test</option>
-                                <option value="chore-reminder">Tag: chore-reminder</option>
-                                <option value="overdue-alert">Tag: overdue-alert</option>
-                                <option value="weekly-summary">Tag: weekly-summary</option>
-                            </select>
+                            <label>Action Button 2</label>
+                            <div class="form-row">
+                                <select id="dev-notif-action2">
+                                    <option value="">None</option>
+                                    <option value="complete">complete (Mark Done)</option>
+                                    <option value="view">view (View Chore)</option>
+                                    <option value="postpone" selected>postpone (Postpone)</option>
+                                    <option value="open">open (Open App)</option>
+                                    <option value="view-overdue">view-overdue (View Overdue)</option>
+                                    <option value="dismiss">dismiss (Dismiss)</option>
+                                </select>
+                                <input type="text" id="dev-notif-action2-label" placeholder="Button label" value="Postpone">
+                            </div>
                         </div>
+
+                        <!-- Behaviour options -->
                         <div class="form-row">
                             <div class="form-group">
                                 <label class="checkbox-label">
@@ -248,19 +301,90 @@
                             </div>
                             <div class="form-group">
                                 <label class="checkbox-label">
+                                    <input type="checkbox" id="dev-notif-renotify">
+                                    <span>Renotify (re-alert same tag)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="dev-notif-silent">
+                                    <span>Silent (no sound/vibrate)</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
                                     <input type="checkbox" id="dev-notif-vibrate" checked>
                                     <span>Vibrate</span>
                                 </label>
                             </div>
                         </div>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireCustomNotif()">Fire Custom Notification</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireCustomViaSW()">Fire Custom via SW</button>
+
+                        <!-- Vibration pattern -->
+                        <div class="form-group">
+                            <label>Vibration Pattern</label>
+                            <select id="dev-notif-vibrate-pattern">
+                                <option value="short">Short pulse (200ms)</option>
+                                <option value="double" selected>Double pulse (200-100-200)</option>
+                                <option value="urgent">Urgent (300-100-300-100-300)</option>
+                                <option value="sos">SOS (100-50-100-50-100-200-300-50-300-50-300-200-100-50-100-50-100)</option>
+                                <option value="none">No vibration</option>
+                            </select>
+                        </div>
+
+                        <!-- Click target -->
+                        <div class="form-group">
+                            <label>On Click Navigate To</label>
+                            <select id="dev-notif-target-view">
+                                <option value="dashboard">Dashboard</option>
+                                <option value="chores" selected>Chores</option>
+                                <option value="family">Family</option>
+                                <option value="dev">Dev Tab</option>
+                            </select>
+                        </div>
+
+                        <!-- Fire buttons -->
+                        <div class="dev-btn-grid" style="margin-top: 12px;">
+                            <button class="dev-btn dev-btn-orange" onclick="devFireCustomNotif()">Fire Now</button>
+                            <button class="dev-btn dev-btn-orange" onclick="devFireCustomViaSW()">Fire via SW</button>
+                        </div>
+                    </div>
+
+                    <!-- Delayed / Scheduled Notifications -->
+                    <div class="dev-custom-notif">
+                        <h5>Delayed / Scheduled Notifications</h5>
+                        <p class="dev-desc">Schedule notifications to fire after a delay. Uses the custom builder settings above.</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Delay (seconds)</label>
+                                <input type="number" id="dev-notif-delay" value="5" min="1" max="3600">
+                            </div>
+                            <div class="form-group">
+                                <label>Repeat count</label>
+                                <input type="number" id="dev-notif-repeat" value="1" min="1" max="20">
+                            </div>
+                            <div class="form-group">
+                                <label>Interval (seconds)</label>
+                                <input type="number" id="dev-notif-interval" value="10" min="1" max="3600">
+                            </div>
+                        </div>
+                        <div class="dev-btn-grid">
+                            <button class="dev-btn dev-btn-orange" onclick="devScheduleNotif()">Schedule</button>
+                            <button class="dev-btn dev-btn-orange" onclick="devScheduleRepeating()">Schedule Repeating</button>
+                            <button class="dev-btn dev-btn-red" onclick="devCancelScheduled()">Cancel All Scheduled</button>
+                        </div>
+                        <div id="dev-scheduled-list" class="dev-scheduled-list"></div>
                     </div>
 
                     <!-- Notification burst -->
-                    <div class="dev-btn-grid" style="margin-top: 12px;">
-                        <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(3)">Fire 3 Rapid Notifications</button>
-                        <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(10)">Fire 10 Rapid Notifications</button>
+                    <div class="dev-custom-notif">
+                        <h5>Burst / Stress Test</h5>
+                        <div class="dev-btn-grid">
+                            <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(3)">Burst x3</button>
+                            <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(5)">Burst x5</button>
+                            <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(10)">Burst x10</button>
+                        </div>
                     </div>
                 </div>
 

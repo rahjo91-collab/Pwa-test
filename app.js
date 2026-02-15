@@ -1545,6 +1545,8 @@ window.devClearLog = function() {
 function renderDevView() {
   devRefreshStats();
   devUpdateNotifStatus();
+  devPopulateChoreDropdown();
+  devRenderScheduledList();
 }
 
 window.devRefreshStats = function() {
@@ -2131,30 +2133,77 @@ window.devFireSWNotif = async function() {
   }
 };
 
-window.devFireCustomNotif = async function() {
-  if (!checkNotifPermission()) return;
+// --- Custom Notification Builder Helpers ---
 
+const VIBRATE_PATTERNS = {
+  short: [200],
+  double: [200, 100, 200],
+  urgent: [300, 100, 300, 100, 300],
+  sos: [100, 50, 100, 50, 100, 200, 300, 50, 300, 50, 300, 200, 100, 50, 100, 50, 100],
+  none: []
+};
+
+function devPopulateChoreDropdown() {
+  const select = document.getElementById('dev-notif-chore');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = '<option value="">None</option>';
+  chores.filter(c => c.status === 'active').forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.title + ' (' + getChoreStatus(c) + ')';
+    select.appendChild(opt);
+  });
+  if (current) select.value = current;
+}
+
+function buildCustomNotifOptions() {
   const title = document.getElementById('dev-notif-title').value || 'Test';
   const body = document.getElementById('dev-notif-body').value || 'Test body';
-  const tag = document.getElementById('dev-notif-tag').value || 'test';
+  const tagBase = document.getElementById('dev-notif-tag').value || 'test';
+  const tag = tagBase === 'custom' ? 'custom-' + Date.now() : tagBase + '-' + Date.now();
+  const choreId = document.getElementById('dev-notif-chore').value ? parseInt(document.getElementById('dev-notif-chore').value) : null;
   const requireInteraction = document.getElementById('dev-notif-require-interaction').checked;
-  const vibrate = document.getElementById('dev-notif-vibrate').checked;
+  const renotify = document.getElementById('dev-notif-renotify').checked;
+  const silent = document.getElementById('dev-notif-silent').checked;
+  const vibrateEnabled = document.getElementById('dev-notif-vibrate').checked;
+  const vibratePattern = document.getElementById('dev-notif-vibrate-pattern').value;
+  const targetView = document.getElementById('dev-notif-target-view').value;
 
-  devLog('Firing custom notification: "' + title + '"...');
-  try {
-    await showNotif(title, {
+  // Build actions array (max 2 for Android)
+  const actions = [];
+  const a1Action = document.getElementById('dev-notif-action1').value;
+  const a1Label = document.getElementById('dev-notif-action1-label').value;
+  if (a1Action) actions.push({ action: a1Action, title: a1Label || a1Action });
+  const a2Action = document.getElementById('dev-notif-action2').value;
+  const a2Label = document.getElementById('dev-notif-action2-label').value;
+  if (a2Action) actions.push({ action: a2Action, title: a2Label || a2Action });
+
+  const vibrate = silent ? undefined : (vibrateEnabled ? VIBRATE_PATTERNS[vibratePattern] || VIBRATE_PATTERNS.double : undefined);
+
+  return {
+    title: title,
+    options: {
       body: body,
       icon: './icon-192x192.png',
       badge: './icon-192x192.png',
-      tag: tag + '-' + Date.now(),
+      tag: tag,
       requireInteraction: requireInteraction,
-      vibrate: vibrate ? [200, 100, 200] : undefined,
-      data: { view: 'dashboard' },
-      actions: [
-        { action: 'open', title: 'Open App' },
-        { action: 'dismiss', title: 'Dismiss' }
-      ]
-    });
+      renotify: renotify,
+      silent: silent,
+      vibrate: vibrate,
+      data: { choreId: choreId, view: targetView },
+      actions: actions
+    }
+  };
+}
+
+window.devFireCustomNotif = async function() {
+  if (!checkNotifPermission()) return;
+  const notif = buildCustomNotifOptions();
+  devLog('Firing custom: "' + notif.title + '" with ' + notif.options.actions.length + ' action(s)...');
+  try {
+    await showNotif(notif.title, notif.options);
     devLog('Custom notification fired.', 'success');
   } catch (err) {
     devLog('Custom notification failed: ' + err.message, 'error');
@@ -2167,33 +2216,122 @@ window.devFireCustomViaSW = async function() {
     return;
   }
   if (!checkNotifPermission()) return;
-
-  const title = document.getElementById('dev-notif-title').value || 'Test';
-  const body = document.getElementById('dev-notif-body').value || 'Test body';
-  const tag = document.getElementById('dev-notif-tag').value || 'test';
-  const requireInteraction = document.getElementById('dev-notif-require-interaction').checked;
-  const vibrate = document.getElementById('dev-notif-vibrate').checked;
-
-  devLog('Firing custom notification via SW: "' + title + '"...');
+  const notif = buildCustomNotifOptions();
+  notif.options.tag = notif.options.tag + '-sw';
+  devLog('Firing custom via SW: "' + notif.title + '" with ' + notif.options.actions.length + ' action(s)...');
   try {
-    await showNotif(title, {
-      body: body,
-      icon: './icon-192x192.png',
-      badge: './icon-192x192.png',
-      tag: tag + '-sw-' + Date.now(),
-      requireInteraction: requireInteraction,
-      vibrate: vibrate ? [200, 100, 200] : undefined,
-      data: { view: 'dashboard' },
-      actions: [
-        { action: 'open', title: 'Open App' },
-        { action: 'dismiss', title: 'Dismiss' }
-      ]
-    });
+    await showNotif(notif.title, notif.options);
     devLog('Custom SW notification fired.', 'success');
   } catch (err) {
     devLog('Custom SW notification failed: ' + err.message, 'error');
   }
 };
+
+// --- Scheduled / Delayed Notifications ---
+
+let scheduledTimers = [];
+
+function devRenderScheduledList() {
+  const container = document.getElementById('dev-scheduled-list');
+  if (!container) return;
+  if (scheduledTimers.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 4px;">No scheduled notifications.</div>';
+    return;
+  }
+  container.innerHTML = scheduledTimers.map((s, i) =>
+    '<div class="dev-scheduled-item">' +
+      '<span class="dev-sched-label">#' + (i + 1) + ' "' + escapeHtml(s.title) + '"' + (s.repeat > 1 ? ' (x' + s.repeat + ', every ' + s.interval + 's)' : '') + '</span>' +
+      '<span class="dev-sched-countdown" id="dev-sched-cd-' + i + '">--</span>' +
+    '</div>'
+  ).join('');
+  devUpdateScheduledCountdowns();
+}
+
+function devUpdateScheduledCountdowns() {
+  const now = Date.now();
+  scheduledTimers.forEach((s, i) => {
+    const el = document.getElementById('dev-sched-cd-' + i);
+    if (!el) return;
+    const remaining = Math.max(0, Math.ceil((s.nextFireAt - now) / 1000));
+    if (s.fired >= s.repeat) {
+      el.textContent = 'done';
+      el.style.color = 'var(--secondary)';
+    } else {
+      el.textContent = remaining + 's' + (s.repeat > 1 ? ' (' + s.fired + '/' + s.repeat + ')' : '');
+    }
+  });
+}
+
+setInterval(devUpdateScheduledCountdowns, 500);
+
+window.devScheduleNotif = function() {
+  if (!checkNotifPermission()) return;
+  const delay = parseInt(document.getElementById('dev-notif-delay').value) || 5;
+  const notif = buildCustomNotifOptions();
+
+  const entry = { title: notif.title, repeat: 1, interval: 0, fired: 0, nextFireAt: Date.now() + delay * 1000, timerIds: [] };
+
+  const timerId = setTimeout(async () => {
+    try {
+      devLog('Scheduled notification firing: "' + notif.title + '"');
+      await showNotif(notif.title, notif.options);
+      entry.fired++;
+      devLog('Scheduled notification fired.', 'success');
+    } catch (err) {
+      devLog('Scheduled notification failed: ' + err.message, 'error');
+    }
+    devRenderScheduledList();
+  }, delay * 1000);
+
+  entry.timerIds.push(timerId);
+  scheduledTimers.push(entry);
+  devLog('Notification scheduled in ' + delay + 's.', 'success');
+  devRenderScheduledList();
+};
+
+window.devScheduleRepeating = function() {
+  if (!checkNotifPermission()) return;
+  const delay = parseInt(document.getElementById('dev-notif-delay').value) || 5;
+  const repeatCount = parseInt(document.getElementById('dev-notif-repeat').value) || 1;
+  const interval = parseInt(document.getElementById('dev-notif-interval').value) || 10;
+
+  const notif = buildCustomNotifOptions();
+  const entry = { title: notif.title, repeat: repeatCount, interval: interval, fired: 0, nextFireAt: Date.now() + delay * 1000, timerIds: [] };
+
+  for (let i = 0; i < repeatCount; i++) {
+    const fireAt = (delay + i * interval) * 1000;
+    const timerId = setTimeout(async () => {
+      try {
+        const opts = Object.assign({}, notif.options, { tag: notif.options.tag + '-r' + i, body: notif.options.body + ' (' + (i + 1) + '/' + repeatCount + ')' });
+        devLog('Repeating notification ' + (i + 1) + '/' + repeatCount + ' firing...');
+        await showNotif(notif.title, opts);
+        entry.fired++;
+        if (i + 1 < repeatCount) entry.nextFireAt = Date.now() + interval * 1000;
+      } catch (err) {
+        devLog('Repeating notification ' + (i + 1) + ' failed: ' + err.message, 'error');
+      }
+      devRenderScheduledList();
+    }, fireAt);
+    entry.timerIds.push(timerId);
+  }
+
+  scheduledTimers.push(entry);
+  devLog('Repeating notification scheduled: ' + repeatCount + 'x every ' + interval + 's (first in ' + delay + 's).', 'success');
+  devRenderScheduledList();
+};
+
+window.devCancelScheduled = function() {
+  let count = 0;
+  scheduledTimers.forEach(entry => {
+    entry.timerIds.forEach(id => clearTimeout(id));
+    count += entry.timerIds.length;
+  });
+  scheduledTimers = [];
+  devLog('Cancelled ' + count + ' scheduled timer(s).', 'warn');
+  devRenderScheduledList();
+};
+
+// --- Burst ---
 
 window.devFireNotifBurst = async function(count) {
   if (!checkNotifPermission()) return;
