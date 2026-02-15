@@ -1920,6 +1920,29 @@ window.devPostponeAllToday = async function() {
 };
 
 // --- Notifications ---
+// All notifications use ServiceWorker.showNotification() for PWA compatibility.
+// The direct `new Notification()` constructor does not work reliably in PWA contexts.
+
+async function showNotif(title, options) {
+  if ('serviceWorker' in navigator) {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, options);
+  } else {
+    new Notification(title, options);
+  }
+}
+
+function checkNotifPermission() {
+  if (!('Notification' in window)) {
+    devLog('Notification API not supported.', 'error');
+    return false;
+  }
+  if (Notification.permission !== 'granted') {
+    devLog('Permission not granted. Current: ' + Notification.permission + '. Click "Request Permission" first.', 'warn');
+    return false;
+  }
+  return true;
+}
 
 window.devRequestNotifPermission = async function() {
   if (!('Notification' in window)) {
@@ -1927,24 +1950,32 @@ window.devRequestNotifPermission = async function() {
     return;
   }
   devLog('Requesting notification permission...');
-  const perm = await Notification.requestPermission();
-  devLog('Permission result: ' + perm, perm === 'granted' ? 'success' : 'warn');
+  try {
+    const perm = await Notification.requestPermission();
+    devLog('Permission result: ' + perm, perm === 'granted' ? 'success' : 'warn');
+  } catch (err) {
+    devLog('Permission request failed: ' + err.message, 'error');
+  }
   devUpdateNotifStatus();
 };
 
-window.devFireBasicNotif = function() {
+window.devFireBasicNotif = async function() {
   if (!checkNotifPermission()) return;
   devLog('Firing basic notification...');
-  new Notification('Family Dashboard', {
-    body: 'This is a test notification from the dev tools!',
-    icon: './icon-192x192.png',
-    badge: './icon-192x192.png',
-    tag: 'dev-test-basic'
-  });
-  devLog('Basic notification fired.', 'success');
+  try {
+    await showNotif('Family Dashboard', {
+      body: 'This is a test notification from the dev tools!',
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: 'dev-test-basic'
+    });
+    devLog('Basic notification fired.', 'success');
+  } catch (err) {
+    devLog('Basic notification failed: ' + err.message, 'error');
+  }
 };
 
-window.devFireChoreReminder = function() {
+window.devFireChoreReminder = async function() {
   if (!checkNotifPermission()) return;
 
   const activeChores = chores.filter(c => c.status === 'active');
@@ -1958,18 +1989,22 @@ window.devFireChoreReminder = function() {
   }
 
   devLog('Firing chore reminder notification...');
-  new Notification('Chore Reminder', {
-    body: choreTitle + ' is due today! Assigned to ' + assigned + '.',
-    icon: './icon-192x192.png',
-    badge: './icon-192x192.png',
-    tag: 'chore-reminder-' + Date.now(),
-    vibrate: [200, 100, 200],
-    requireInteraction: false
-  });
-  devLog('Chore reminder fired for: ' + choreTitle, 'success');
+  try {
+    await showNotif('Chore Reminder', {
+      body: choreTitle + ' is due today! Assigned to ' + assigned + '.',
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: 'chore-reminder-' + Date.now(),
+      vibrate: [200, 100, 200],
+      requireInteraction: false
+    });
+    devLog('Chore reminder fired for: ' + choreTitle, 'success');
+  } catch (err) {
+    devLog('Chore reminder failed: ' + err.message, 'error');
+  }
 };
 
-window.devFireOverdueAlert = function() {
+window.devFireOverdueAlert = async function() {
   if (!checkNotifPermission()) return;
 
   const overdueChores = chores.filter(c => getChoreStatus(c) === 'overdue');
@@ -1981,15 +2016,19 @@ window.devFireOverdueAlert = function() {
   }
 
   devLog('Firing overdue alert...');
-  new Notification('Overdue Alert!', {
-    body: body,
-    icon: './icon-192x192.png',
-    badge: './icon-192x192.png',
-    tag: 'overdue-alert-' + Date.now(),
-    vibrate: [300, 100, 300, 100, 300],
-    requireInteraction: true
-  });
-  devLog('Overdue alert fired.', 'success');
+  try {
+    await showNotif('Overdue Alert!', {
+      body: body,
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: 'overdue-alert-' + Date.now(),
+      vibrate: [300, 100, 300, 100, 300],
+      requireInteraction: true
+    });
+    devLog('Overdue alert fired.', 'success');
+  } catch (err) {
+    devLog('Overdue alert failed: ' + err.message, 'error');
+  }
 };
 
 window.devFireSWNotif = async function() {
@@ -2001,8 +2040,7 @@ window.devFireSWNotif = async function() {
 
   devLog('Firing notification via Service Worker...');
   try {
-    const reg = await navigator.serviceWorker.ready;
-    await reg.showNotification('Family Dashboard (via SW)', {
+    await showNotif('Family Dashboard (via SW)', {
       body: 'This notification came through the Service Worker!',
       icon: './icon-192x192.png',
       badge: './icon-192x192.png',
@@ -2019,7 +2057,7 @@ window.devFireSWNotif = async function() {
   }
 };
 
-window.devFireCustomNotif = function() {
+window.devFireCustomNotif = async function() {
   if (!checkNotifPermission()) return;
 
   const title = document.getElementById('dev-notif-title').value || 'Test';
@@ -2029,15 +2067,19 @@ window.devFireCustomNotif = function() {
   const vibrate = document.getElementById('dev-notif-vibrate').checked;
 
   devLog('Firing custom notification: "' + title + '"...');
-  new Notification(title, {
-    body: body,
-    icon: './icon-192x192.png',
-    badge: './icon-192x192.png',
-    tag: tag + '-' + Date.now(),
-    requireInteraction: requireInteraction,
-    vibrate: vibrate ? [200, 100, 200] : undefined
-  });
-  devLog('Custom notification fired.', 'success');
+  try {
+    await showNotif(title, {
+      body: body,
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
+      tag: tag + '-' + Date.now(),
+      requireInteraction: requireInteraction,
+      vibrate: vibrate ? [200, 100, 200] : undefined
+    });
+    devLog('Custom notification fired.', 'success');
+  } catch (err) {
+    devLog('Custom notification failed: ' + err.message, 'error');
+  }
 };
 
 window.devFireCustomViaSW = async function() {
@@ -2055,8 +2097,7 @@ window.devFireCustomViaSW = async function() {
 
   devLog('Firing custom notification via SW: "' + title + '"...');
   try {
-    const reg = await navigator.serviceWorker.ready;
-    await reg.showNotification(title, {
+    await showNotif(title, {
       body: body,
       icon: './icon-192x192.png',
       badge: './icon-192x192.png',
@@ -2088,32 +2129,24 @@ window.devFireNotifBurst = async function(count) {
 
   for (let i = 0; i < count; i++) {
     const msg = messages[i % messages.length];
-    const delay = i * 800; // stagger by 800ms
+    const delay = i * 800;
 
-    setTimeout(() => {
-      new Notification('Family Dashboard', {
-        body: '(' + (i + 1) + '/' + count + ') ' + msg,
-        icon: './icon-192x192.png',
-        tag: 'burst-' + Date.now() + '-' + i,
-        vibrate: [100]
-      });
+    setTimeout(async () => {
+      try {
+        await showNotif('Family Dashboard', {
+          body: '(' + (i + 1) + '/' + count + ') ' + msg,
+          icon: './icon-192x192.png',
+          tag: 'burst-' + Date.now() + '-' + i,
+          vibrate: [100]
+        });
+      } catch (err) {
+        devLog('Burst notification ' + (i + 1) + ' failed: ' + err.message, 'error');
+      }
     }, delay);
   }
 
   devLog('Burst scheduled: ' + count + ' notifications over ' + ((count * 800) / 1000).toFixed(1) + 's.', 'success');
 };
-
-function checkNotifPermission() {
-  if (!('Notification' in window)) {
-    devLog('Notification API not supported.', 'error');
-    return false;
-  }
-  if (Notification.permission !== 'granted') {
-    devLog('Permission not granted. Current: ' + Notification.permission + '. Click "Request Permission" first.', 'warn');
-    return false;
-  }
-  return true;
-}
 
 // --- Data Management ---
 
