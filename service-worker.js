@@ -124,33 +124,32 @@ self.addEventListener('push', (event) => {
 
 // Notification click event
 self.addEventListener('notificationclick', (event) => {
-  console.log('Notification clicked:', event);
-  console.log('Action clicked:', event.action);
+  const action = event.action || 'open';
+  const data = event.notification.data || {};
 
   event.notification.close();
 
-  // Handle different actions
-  if (event.action === 'dismiss' || event.action === 'close') {
-    // Just close the notification
+  if (action === 'dismiss' || action === 'close') {
     return;
   }
 
-  // For 'open', 'explore', or default click - open/focus the app
+  // Build message to send to the app
+  const msg = { type: 'notification-action', action: action, choreId: data.choreId || null, view: data.view || null };
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        const urlToOpen = event.notification.data?.url || './';
-
-        // If the app is already open, focus it
+        // If the app is already open, focus it and send the action
         for (let client of clientList) {
           if (client.url.includes(self.registration.scope) && 'focus' in client) {
+            client.postMessage(msg);
             return client.focus();
           }
         }
 
-        // Otherwise, open a new window
+        // Otherwise open a new window
         if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
+          return clients.openWindow('./?notif_action=' + action + (data.choreId ? '&chore=' + data.choreId : ''));
         }
       })
       .catch((error) => {

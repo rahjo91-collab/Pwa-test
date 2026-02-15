@@ -1295,6 +1295,38 @@ function escapeHtml(str) {
 }
 
 // ==========================================
+// NOTIFICATION ACTION HANDLER
+// ==========================================
+
+function handleNotificationAction(action, choreId, view) {
+  console.log('Notification action:', action, 'choreId:', choreId, 'view:', view);
+
+  if (action === 'view' && choreId) {
+    switchView('chores');
+    setTimeout(() => openDetailModal(choreId), 150);
+  } else if (action === 'complete' && choreId) {
+    switchView('chores');
+    setTimeout(() => openCompleteModal(choreId), 150);
+  } else if (action === 'postpone' && choreId) {
+    postponeChore(choreId);
+    switchView('chores');
+  } else if (action === 'view-overdue') {
+    switchView('chores');
+    setTimeout(() => {
+      const filter = document.getElementById('filter-status');
+      if (filter) { filter.value = 'overdue'; renderChoresList(); }
+    }, 150);
+  } else if (action === 'open' || action === 'default' || !action) {
+    // Default click - just open/focus the dashboard
+    switchView('dashboard');
+  } else if (view) {
+    switchView(view);
+  } else {
+    switchView('dashboard');
+  }
+}
+
+// ==========================================
 // EVENT LISTENERS
 // ==========================================
 
@@ -1416,6 +1448,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error('Service Worker registration failed:', err);
     }
+
+    // Handle notification click actions from the service worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event.data;
+      if (msg && msg.type === 'notification-action') {
+        handleNotificationAction(msg.action, msg.choreId, msg.view);
+      }
+    });
+  }
+
+  // Handle notification deep link from URL (when app wasn't open)
+  const params = new URLSearchParams(window.location.search);
+  const notifAction = params.get('notif_action');
+  if (notifAction) {
+    const choreId = params.get('chore') ? parseInt(params.get('chore')) : null;
+    // Small delay to let DB load
+    setTimeout(() => handleNotificationAction(notifAction, choreId), 300);
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   // PWA install
@@ -1967,7 +2018,12 @@ window.devFireBasicNotif = async function() {
       body: 'This is a test notification from the dev tools!',
       icon: './icon-192x192.png',
       badge: './icon-192x192.png',
-      tag: 'dev-test-basic'
+      tag: 'dev-test-basic',
+      data: { view: 'dashboard' },
+      actions: [
+        { action: 'open', title: 'Open Dashboard' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
     });
     devLog('Basic notification fired.', 'success');
   } catch (err) {
@@ -1981,9 +2037,11 @@ window.devFireChoreReminder = async function() {
   const activeChores = chores.filter(c => c.status === 'active');
   let choreTitle = 'Wash the dishes';
   let assigned = 'everyone';
+  let choreId = null;
   if (activeChores.length > 0) {
     const c = randomPick(activeChores);
     choreTitle = c.title;
+    choreId = c.id;
     const m = c.assignedTo ? getMemberById(c.assignedTo) : null;
     assigned = m ? m.name : 'everyone';
   }
@@ -1996,7 +2054,12 @@ window.devFireChoreReminder = async function() {
       badge: './icon-192x192.png',
       tag: 'chore-reminder-' + Date.now(),
       vibrate: [200, 100, 200],
-      requireInteraction: false
+      requireInteraction: false,
+      data: { choreId: choreId, view: 'chores' },
+      actions: [
+        { action: 'complete', title: 'Mark Done' },
+        { action: 'postpone', title: 'Postpone' }
+      ]
     });
     devLog('Chore reminder fired for: ' + choreTitle, 'success');
   } catch (err) {
@@ -2009,7 +2072,9 @@ window.devFireOverdueAlert = async function() {
 
   const overdueChores = chores.filter(c => getChoreStatus(c) === 'overdue');
   let body = 'You have overdue chores! Time to get on top of things.';
+  let firstChoreId = null;
   if (overdueChores.length > 0) {
+    firstChoreId = overdueChores[0].id;
     const names = overdueChores.slice(0, 3).map(c => c.title).join(', ');
     body = overdueChores.length + ' chore(s) overdue: ' + names;
     if (overdueChores.length > 3) body += ' and ' + (overdueChores.length - 3) + ' more';
@@ -2023,7 +2088,12 @@ window.devFireOverdueAlert = async function() {
       badge: './icon-192x192.png',
       tag: 'overdue-alert-' + Date.now(),
       vibrate: [300, 100, 300, 100, 300],
-      requireInteraction: true
+      requireInteraction: true,
+      data: { choreId: firstChoreId, view: 'chores' },
+      actions: [
+        { action: 'view-overdue', title: 'View Overdue' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
     });
     devLog('Overdue alert fired.', 'success');
   } catch (err) {
@@ -2038,17 +2108,21 @@ window.devFireSWNotif = async function() {
   }
   if (!checkNotifPermission()) return;
 
+  const activeChores = chores.filter(c => c.status === 'active');
+  const chore = activeChores.length > 0 ? randomPick(activeChores) : null;
+
   devLog('Firing notification via Service Worker...');
   try {
     await showNotif('Family Dashboard (via SW)', {
-      body: 'This notification came through the Service Worker!',
+      body: chore ? chore.title + ' needs attention!' : 'You have chores to do!',
       icon: './icon-192x192.png',
       badge: './icon-192x192.png',
       tag: 'dev-sw-test-' + Date.now(),
       vibrate: [200, 100, 200],
+      data: { choreId: chore ? chore.id : null, view: 'chores' },
       actions: [
-        { action: 'open', title: 'Open App' },
-        { action: 'dismiss', title: 'Dismiss' }
+        { action: 'view', title: 'View Chore' },
+        { action: 'complete', title: 'Mark Done' }
       ]
     });
     devLog('Service Worker notification fired.', 'success');
@@ -2074,7 +2148,12 @@ window.devFireCustomNotif = async function() {
       badge: './icon-192x192.png',
       tag: tag + '-' + Date.now(),
       requireInteraction: requireInteraction,
-      vibrate: vibrate ? [200, 100, 200] : undefined
+      vibrate: vibrate ? [200, 100, 200] : undefined,
+      data: { view: 'dashboard' },
+      actions: [
+        { action: 'open', title: 'Open App' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
     });
     devLog('Custom notification fired.', 'success');
   } catch (err) {
@@ -2104,6 +2183,7 @@ window.devFireCustomViaSW = async function() {
       tag: tag + '-sw-' + Date.now(),
       requireInteraction: requireInteraction,
       vibrate: vibrate ? [200, 100, 200] : undefined,
+      data: { view: 'dashboard' },
       actions: [
         { action: 'open', title: 'Open App' },
         { action: 'dismiss', title: 'Dismiss' }
@@ -2137,7 +2217,12 @@ window.devFireNotifBurst = async function(count) {
           body: '(' + (i + 1) + '/' + count + ') ' + msg,
           icon: './icon-192x192.png',
           tag: 'burst-' + Date.now() + '-' + i,
-          vibrate: [100]
+          vibrate: [100],
+          data: { view: 'chores' },
+          actions: [
+            { action: 'open', title: 'Open App' },
+            { action: 'dismiss', title: 'Dismiss' }
+          ]
         });
       } catch (err) {
         devLog('Burst notification ' + (i + 1) + ' failed: ' + err.message, 'error');
