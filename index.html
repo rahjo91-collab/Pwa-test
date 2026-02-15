@@ -88,6 +88,35 @@
                     <p id="upcoming-empty" class="empty-hint" style="display:none;">No upcoming chores this week.</p>
                 </section>
 
+                <!-- Bonus Challenge -->
+                <section class="dashboard-section" id="section-bonus-challenge">
+                    <h3 class="section-title">Daily Bonus Challenge</h3>
+                    <div id="bonus-challenge" class="bonus-challenge-card"></div>
+                </section>
+
+                <!-- I've Got Time -->
+                <section class="dashboard-section" id="section-ive-got-time">
+                    <h3 class="section-title">I've Got Time</h3>
+                    <p class="section-desc">Got some spare time? Here's what would help most:</p>
+                    <div class="igt-filters">
+                        <button class="igt-filter-btn active" data-effort="all" onclick="renderIveGotTimeView('all')">All</button>
+                        <button class="igt-filter-btn" data-effort="quick" onclick="renderIveGotTimeView('quick')">Quick Jobs</button>
+                        <button class="igt-filter-btn" data-effort="medium" onclick="renderIveGotTimeView('medium')">Up to Medium</button>
+                    </div>
+                    <div id="ive-got-time-list" class="igt-list"></div>
+                </section>
+
+                <!-- Quick Tasks -->
+                <section class="dashboard-section" id="section-quick-tasks">
+                    <h3 class="section-title">Quick Tasks</h3>
+                    <p class="section-desc">One-off tasks anyone can grab.</p>
+                    <div class="quick-task-add">
+                        <input type="text" id="quick-task-input" placeholder="e.g. Bring parcel inside, Wipe counter..." onkeydown="if(event.key==='Enter'){addQuickTask(this.value);this.value='';renderQuickTasks();}">
+                        <button class="btn-sm btn-primary" onclick="addQuickTask(document.getElementById('quick-task-input').value);document.getElementById('quick-task-input').value='';renderQuickTasks();">Add</button>
+                    </div>
+                    <div id="quick-tasks-list"></div>
+                </section>
+
                 <section class="dashboard-section" id="section-leaderboard">
                     <h3 class="section-title">Family Leaderboard (This Week)</h3>
                     <div id="dashboard-leaderboard" class="leaderboard"></div>
@@ -686,6 +715,32 @@
                 <div class="modal-footer">
                     <button type="button" id="detail-modal-edit" class="btn-secondary">Edit</button>
                     <button type="button" id="detail-modal-ok" class="btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Menu Overlay -->
+        <div id="action-menu-overlay" class="action-menu-overlay" style="display:none;" onclick="if(event.target===this)closeActionMenu();">
+            <div id="action-menu" class="action-menu">
+                <div class="action-menu-header">
+                    <span id="action-menu-title" class="action-menu-title"></span>
+                    <button class="modal-close" onclick="closeActionMenu()">&times;</button>
+                </div>
+                <div class="action-menu-items"></div>
+            </div>
+        </div>
+
+        <!-- While You're At It (shown after completing a chore) -->
+        <div id="wyai-overlay" class="action-menu-overlay" style="display:none;" onclick="if(event.target===this)closeWyai();">
+            <div class="action-menu wyai-menu">
+                <div class="action-menu-header">
+                    <span class="action-menu-title">While You're At It...</span>
+                    <button class="modal-close" onclick="closeWyai()">&times;</button>
+                </div>
+                <p class="wyai-desc">You just finished a chore! Here are some nearby tasks:</p>
+                <div id="wyai-list" class="action-menu-items"></div>
+                <div class="wyai-skip">
+                    <button class="btn-secondary" onclick="closeWyai()">I'm Good, Thanks</button>
                 </div>
             </div>
         </div>

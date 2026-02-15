@@ -466,6 +466,13 @@ async function completeChore(choreId, memberId, notes) {
 function calculatePoints(chore, wasOnTime) {
   let points = chore.points || 0;
 
+  // "Quick Job" half points mode
+  if (chore._halfPoints) {
+    points = Math.round(points / 2);
+    delete chore._halfPoints;
+    return points;
+  }
+
   if (chore.bonusEarly && wasOnTime) {
     points = Math.round(points * 1.5);
   }
@@ -524,6 +531,434 @@ async function togglePauseChore(choreId) {
 
   await loadAllData();
   renderCurrentView();
+}
+
+// --- Smart Reschedule Actions ---
+
+async function skipThisCycle(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore || !chore.nextDue) return;
+
+  // Calculate next due based on frequency — skips to the next natural cycle
+  const nextDue = calculateNextDue(chore, chore.nextDue);
+  if (nextDue) {
+    chore.nextDue = nextDue;
+  } else {
+    // Fallback: push 7 days
+    const d = parseDate(chore.nextDue);
+    d.setDate(d.getDate() + 7);
+    chore.nextDue = toDateStr(d);
+  }
+  chore.currentPostponeStreak = 0;
+  chore.currentStreak = 0;
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+  await loadAllData();
+  renderCurrentView();
+  closeActionMenu();
+}
+
+async function doTomorrow(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  const tomorrow = today();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  chore.nextDue = toDateStr(tomorrow);
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+  await loadAllData();
+  renderCurrentView();
+  closeActionMenu();
+}
+
+async function doThisWeekend(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  const d = today();
+  const dayOfWeek = d.getDay();
+  // Move to Saturday (6). If already Sat/Sun, move to next Saturday.
+  const daysUntilSat = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+  d.setDate(d.getDate() + daysUntilSat);
+  chore.nextDue = toDateStr(d);
+  chore.updatedAt = new Date().toISOString();
+  await dbPut('chores', chore);
+  await loadAllData();
+  renderCurrentView();
+  closeActionMenu();
+}
+
+async function swapChore(choreId) {
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+
+  const otherMembers = familyMembers.filter(m => m.id !== chore.assignedTo);
+  if (otherMembers.length === 0) {
+    alert('No other family members to swap with.');
+    return;
+  }
+
+  // Show a quick picker
+  const names = otherMembers.map((m, i) => (i + 1) + '. ' + m.name).join('\n');
+  const choice = prompt('Swap "' + chore.title + '" to:\n' + names + '\n\nEnter number:');
+  if (!choice) return;
+
+  const idx = parseInt(choice) - 1;
+  if (idx >= 0 && idx < otherMembers.length) {
+    chore.assignedTo = otherMembers[idx].id;
+    chore.updatedAt = new Date().toISOString();
+    await dbPut('chores', chore);
+    await loadAllData();
+    renderCurrentView();
+  }
+  closeActionMenu();
+}
+
+async function halvePoints(choreId) {
+  // "Do it quick" - marks as lower effort, halves points, but logs completion
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+  chore._halfPoints = true;
+  openCompleteModal(choreId);
+  closeActionMenu();
+}
+
+// --- Action Menu ---
+
+let actionMenuChoreId = null;
+
+function openActionMenu(choreId, event) {
+  event.stopPropagation();
+  const chore = chores.find(c => c.id === choreId);
+  if (!chore) return;
+  actionMenuChoreId = choreId;
+
+  const status = getChoreStatus(chore);
+  const member = chore.assignedTo ? getMemberById(chore.assignedTo) : null;
+  const canPostpone = chore.maxPostpones === -1 || (chore.currentPostponeStreak || 0) < chore.maxPostpones;
+
+  let items = '';
+
+  // Always show these for active chores
+  if (chore.status === 'active') {
+    items += '<div class="action-menu-item action-menu-complete" onclick="openCompleteModal(' + choreId + '); closeActionMenu();">Mark Done</div>';
+
+    if (canPostpone && chore.maxPostpones !== 0) {
+      items += '<div class="action-menu-item" onclick="doTomorrow(' + choreId + ')">Do Tomorrow</div>';
+      items += '<div class="action-menu-item" onclick="doThisWeekend(' + choreId + ')">Do This Weekend</div>';
+    }
+
+    // Skip cycle - contextual label
+    let skipLabel = 'Skip This Cycle';
+    if (chore.frequency === 'weekly') skipLabel = 'Skip This Week';
+    else if (chore.frequency === 'biweekly') skipLabel = 'Skip These 2 Weeks';
+    else if (chore.frequency === 'monthly') skipLabel = 'Skip This Month';
+    else if (chore.frequency === 'daily') skipLabel = 'Skip Today';
+    items += '<div class="action-menu-item" onclick="skipThisCycle(' + choreId + ')">' + skipLabel + '</div>';
+
+    items += '<div class="action-menu-divider"></div>';
+
+    if (familyMembers.length > 1) {
+      items += '<div class="action-menu-item" onclick="swapChore(' + choreId + ')">Swap To Someone Else</div>';
+    }
+
+    items += '<div class="action-menu-item" onclick="halvePoints(' + choreId + ')">Quick Job (Half Points)</div>';
+
+    items += '<div class="action-menu-divider"></div>';
+    items += '<div class="action-menu-item" onclick="togglePauseChore(' + choreId + '); closeActionMenu();">Pause Chore</div>';
+  } else if (chore.status === 'paused') {
+    items += '<div class="action-menu-item action-menu-complete" onclick="togglePauseChore(' + choreId + '); closeActionMenu();">Resume Chore</div>';
+  }
+
+  items += '<div class="action-menu-item" onclick="openDetailModal(' + choreId + '); closeActionMenu();">View Details</div>';
+  items += '<div class="action-menu-item" onclick="openChoreModal(' + choreId + '); closeActionMenu();">Edit Chore</div>';
+
+  const overlay = document.getElementById('action-menu-overlay');
+  const menu = document.getElementById('action-menu');
+  const title = document.getElementById('action-menu-title');
+
+  title.textContent = chore.title;
+  menu.querySelector('.action-menu-items').innerHTML = items;
+  overlay.style.display = 'flex';
+}
+
+function closeActionMenu() {
+  const overlay = document.getElementById('action-menu-overlay');
+  if (overlay) overlay.style.display = 'none';
+  actionMenuChoreId = null;
+}
+
+// --- While You're At It ---
+
+function showWhileYoureAtIt(completedChore) {
+  const suggestions = getWhileYoureAtItSuggestions(completedChore);
+  if (suggestions.length === 0) return;
+
+  const list = document.getElementById('wyai-list');
+  if (!list) return;
+
+  list.innerHTML = suggestions.map(c => {
+    const status = getChoreStatus(c);
+    const catLabel = CATEGORY_LABELS[c.category] || c.category;
+    return '<div class="action-menu-item" onclick="openCompleteModal(' + c.id + '); closeWyai();">' +
+      '<div class="wyai-chore-info">' +
+        '<strong>' + escapeHtml(c.title) + '</strong>' +
+        '<span class="wyai-chore-meta">' + catLabel +
+          (status === 'due-today' ? ' &bull; Due today' : '') +
+          (status === 'overdue' ? ' &bull; Overdue' : '') +
+          ' &bull; ' + (c.points || 0) + ' pts</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('wyai-overlay').style.display = 'flex';
+}
+
+function closeWyai() {
+  const overlay = document.getElementById('wyai-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+window.closeWyai = closeWyai;
+
+// --- "I've Got Time" Suggestions ---
+
+function getIveGotTimeSuggestions(effortLevel) {
+  const activeChores = chores.filter(c => c.status === 'active');
+  const scored = [];
+
+  activeChores.forEach(c => {
+    const status = getChoreStatus(c);
+    let score = 0;
+
+    // Effort filter
+    if (effortLevel === 'quick' && c.effort !== 'quick') return;
+    if (effortLevel === 'medium' && c.effort === 'long') return;
+
+    // Priority bonus
+    if (c.priority === 'critical') score += 50;
+    else if (c.priority === 'high') score += 30;
+    else if (c.priority === 'medium') score += 15;
+
+    // Status bonus
+    if (status === 'overdue') score += 40;
+    else if (status === 'grace-period') score += 25;
+    else if (status === 'due-today') score += 20;
+    else if (status === 'upcoming') {
+      const daysUntil = daysBetween(today(), parseDate(c.nextDue));
+      if (daysUntil <= 2) score += 10;
+      else score += 2;
+    }
+
+    // Streak bonus - keep a streak alive
+    if (c.currentStreak > 0) score += 10;
+
+    // Unassigned chores are up for grabs
+    if (!c.assignedTo) score += 5;
+
+    scored.push({ chore: c, score: score, status: status });
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 8);
+}
+
+function renderIveGotTimeView(effortLevel) {
+  effortLevel = effortLevel || 'all';
+  const suggestions = getIveGotTimeSuggestions(effortLevel);
+
+  const container = document.getElementById('ive-got-time-list');
+  if (!container) return;
+
+  // Update active filter button
+  document.querySelectorAll('.igt-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.effort === effortLevel);
+  });
+
+  if (suggestions.length === 0) {
+    container.innerHTML = '<div class="empty-message">All caught up! Nothing urgent right now.</div>';
+    return;
+  }
+
+  container.innerHTML = suggestions.map(s =>
+    '<div class="igt-suggestion" onclick="openActionMenu(' + s.chore.id + ', event)">' +
+      '<div class="igt-suggestion-left">' +
+        '<span class="igt-suggestion-title">' + escapeHtml(s.chore.title) + '</span>' +
+        '<span class="igt-suggestion-meta">' +
+          EFFORT_LABELS[s.chore.effort || 'medium'] + ' &bull; ' +
+          CATEGORY_LABELS[s.chore.category || 'general'] +
+          (s.status === 'overdue' ? ' &bull; <strong class="due-overdue">Overdue</strong>' : '') +
+          (s.status === 'due-today' ? ' &bull; <strong class="due-today">Due today</strong>' : '') +
+        '</span>' +
+      '</div>' +
+      '<div class="igt-suggestion-right">' +
+        '<span class="igt-suggestion-points">' + (s.chore.points || 0) + ' pts</span>' +
+        '<button class="chore-action-btn btn-complete" onclick="event.stopPropagation(); openCompleteModal(' + s.chore.id + ')">Do It</button>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+
+// --- While You're At It (related chore suggestions after completing) ---
+
+function getWhileYoureAtItSuggestions(completedChore) {
+  const related = chores.filter(c =>
+    c.id !== completedChore.id &&
+    c.status === 'active' &&
+    (c.category === completedChore.category ||
+     (getChoreStatus(c) === 'due-today' || getChoreStatus(c) === 'overdue' || getChoreStatus(c) === 'grace-period'))
+  );
+
+  // Prioritise same-category, then by urgency
+  related.sort((a, b) => {
+    const sameA = a.category === completedChore.category ? 1 : 0;
+    const sameB = b.category === completedChore.category ? 1 : 0;
+    if (sameA !== sameB) return sameB - sameA;
+    const statusOrder = { overdue: 0, 'grace-period': 1, 'due-today': 2, upcoming: 3 };
+    return (statusOrder[getChoreStatus(a)] || 9) - (statusOrder[getChoreStatus(b)] || 9);
+  });
+
+  return related.slice(0, 3);
+}
+
+// --- Bonus Challenges ---
+
+function getDailyBonusChallenge() {
+  // Deterministic based on day so everyone sees the same challenge
+  const dayNum = Math.floor(today().getTime() / 86400000);
+  const challenges = [
+    { title: 'Speed Clean', desc: 'Complete 3 chores in under 30 minutes', bonusPoints: 20, target: 3 },
+    { title: 'Deep Clean One Room', desc: 'Pick any room and do ALL chores for it', bonusPoints: 30, target: 0 },
+    { title: 'Overdue Blitz', desc: 'Clear all overdue chores today', bonusPoints: 25, target: 0 },
+    { title: 'Helping Hand', desc: 'Complete 2 chores assigned to someone else', bonusPoints: 20, target: 2 },
+    { title: 'Streak Builder', desc: 'Complete 3 chores that have an active streak', bonusPoints: 15, target: 3 },
+    { title: 'Quick Win Spree', desc: 'Do 5 quick-effort chores', bonusPoints: 20, target: 5 },
+    { title: 'Points Hunter', desc: 'Earn 50+ points today', bonusPoints: 15, target: 50 }
+  ];
+  return challenges[dayNum % challenges.length];
+}
+
+function getBonusChallengeProgress(challenge) {
+  const todayStr = toDateStr(today());
+  const todayCompletions = completions.filter(c => toDateStr(new Date(c.completedAt)) === todayStr);
+
+  switch (challenge.title) {
+    case 'Speed Clean':
+    case 'Streak Builder':
+      return { current: todayCompletions.length, target: challenge.target };
+    case 'Quick Win Spree': {
+      const quickDone = todayCompletions.filter(tc => {
+        const ch = chores.find(c => c.id === tc.choreId);
+        return ch && ch.effort === 'quick';
+      }).length;
+      return { current: quickDone, target: challenge.target };
+    }
+    case 'Helping Hand': {
+      // Count completions where completer !== assigned
+      const helped = todayCompletions.filter(tc => {
+        const ch = chores.find(c => c.id === tc.choreId);
+        return ch && ch.assignedTo && ch.assignedTo !== tc.completedBy;
+      }).length;
+      return { current: helped, target: challenge.target };
+    }
+    case 'Overdue Blitz': {
+      const overdueLeft = chores.filter(c => getChoreStatus(c) === 'overdue').length;
+      return { current: overdueLeft === 0 ? 1 : 0, target: 1 };
+    }
+    case 'Points Hunter': {
+      const totalPts = todayCompletions.reduce((sum, c) => sum + (c.pointsAwarded || 0), 0);
+      return { current: totalPts, target: challenge.target };
+    }
+    case 'Deep Clean One Room':
+      return { current: todayCompletions.length, target: Math.max(1, todayCompletions.length) };
+    default:
+      return { current: 0, target: 1 };
+  }
+}
+
+// --- Quick Tasks ---
+
+let quickTasks = [];
+
+function loadQuickTasks() {
+  const stored = localStorage.getItem('familyDashboard_quickTasks');
+  quickTasks = stored ? JSON.parse(stored) : [];
+}
+
+function saveQuickTasks() {
+  localStorage.setItem('familyDashboard_quickTasks', JSON.stringify(quickTasks));
+}
+
+function addQuickTask(title) {
+  if (!title || !title.trim()) return;
+  quickTasks.push({
+    id: Date.now(),
+    title: title.trim(),
+    createdAt: new Date().toISOString(),
+    createdBy: null,
+    claimedBy: null,
+    done: false
+  });
+  saveQuickTasks();
+}
+
+function claimQuickTask(taskId, memberId) {
+  const task = quickTasks.find(t => t.id === taskId);
+  if (task) {
+    task.claimedBy = memberId;
+    saveQuickTasks();
+  }
+}
+
+function completeQuickTask(taskId) {
+  quickTasks = quickTasks.filter(t => t.id !== taskId);
+  saveQuickTasks();
+}
+
+function renderQuickTasks() {
+  const container = document.getElementById('quick-tasks-list');
+  if (!container) return;
+  loadQuickTasks();
+
+  const pending = quickTasks.filter(t => !t.done);
+
+  if (pending.length === 0) {
+    container.innerHTML = '<div class="empty-message">No quick tasks. Add one above!</div>';
+    return;
+  }
+
+  container.innerHTML = pending.map(t => {
+    const claimer = t.claimedBy ? getMemberById(t.claimedBy) : null;
+    return '<div class="quick-task-item">' +
+      '<span class="quick-task-title">' + escapeHtml(t.title) + '</span>' +
+      (claimer ? '<span class="quick-task-claimed">' + claimer.avatar + ' ' + escapeHtml(claimer.name) + '</span>' : '') +
+      '<div class="quick-task-actions">' +
+        (!claimer ? '<button class="chore-action-btn btn-postpone" onclick="claimQuickTaskPrompt(' + t.id + ')">Grab</button>' : '') +
+        '<button class="chore-action-btn btn-complete" onclick="completeQuickTask(' + t.id + '); renderQuickTasks();">Done</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function claimQuickTaskPrompt(taskId) {
+  if (familyMembers.length === 0) {
+    alert('Add family members first!');
+    return;
+  }
+  if (familyMembers.length === 1) {
+    claimQuickTask(taskId, familyMembers[0].id);
+    renderQuickTasks();
+    return;
+  }
+  const names = familyMembers.map((m, i) => (i + 1) + '. ' + m.name).join('\n');
+  const choice = prompt('Who is grabbing this?\n' + names + '\n\nEnter number:');
+  if (!choice) return;
+  const idx = parseInt(choice) - 1;
+  if (idx >= 0 && idx < familyMembers.length) {
+    claimQuickTask(taskId, familyMembers[idx].id);
+    renderQuickTasks();
+  }
 }
 
 // ==========================================
@@ -661,6 +1096,33 @@ function renderDashboard() {
     upcomingEmpty.style.display = '';
   }
 
+  // Render bonus challenge
+  const challenge = getDailyBonusChallenge();
+  const progress = getBonusChallengeProgress(challenge);
+  const challengeDone = progress.target > 0 && progress.current >= progress.target;
+  const bonusEl = document.getElementById('bonus-challenge');
+  if (bonusEl) {
+    bonusEl.innerHTML = `
+      <div class="bonus-challenge-inner ${challengeDone ? 'bonus-done' : ''}">
+        <div class="bonus-challenge-top">
+          <span class="bonus-title">${escapeHtml(challenge.title)}</span>
+          <span class="bonus-points">+${challenge.bonusPoints} pts</span>
+        </div>
+        <p class="bonus-desc">${escapeHtml(challenge.desc)}</p>
+        ${challenge.target > 0 ? `<div class="bonus-progress">
+          <div class="bonus-progress-bar" style="width:${Math.min(100, Math.round(progress.current / progress.target * 100))}%"></div>
+        </div>
+        <span class="bonus-progress-text">${progress.current} / ${progress.target}${challengeDone ? ' - Complete!' : ''}</span>` : ''}
+      </div>
+    `;
+  }
+
+  // Render I've Got Time
+  renderIveGotTimeView('all');
+
+  // Render Quick Tasks
+  renderQuickTasks();
+
   // Render leaderboard
   renderLeaderboard();
 }
@@ -728,7 +1190,7 @@ function renderChoreCard(chore) {
     : '';
 
   return `
-    <div class="chore-card priority-${chore.priority} ${statusClass}" onclick="openDetailModal(${chore.id})">
+    <div class="chore-card priority-${chore.priority} ${statusClass}" onclick="openActionMenu(${chore.id}, event)">
       ${avatarHtml}
       <div class="chore-card-body">
         <div class="chore-card-top">
@@ -1340,6 +1802,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   populateMemberDropdowns();
+  loadQuickTasks();
   renderCurrentView();
 
   // Tab navigation
@@ -1417,8 +1880,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const notes = document.getElementById('complete-notes').value.trim();
+    const choreForWyai = chores.find(c => c.id === completingChoreId);
     await completeChore(completingChoreId, parseInt(memberVal), notes);
     closeCompleteModal();
+    // Show "While You're At It" suggestions
+    if (choreForWyai) showWhileYoureAtIt(choreForWyai);
   });
 
   // Detail modal events
@@ -1500,6 +1966,18 @@ window.togglePauseChore = togglePauseChore;
 window.openDetailModal = openDetailModal;
 window.openEditFamilyModal = openEditFamilyModal;
 window.openChoreModal = openChoreModal;
+window.openActionMenu = openActionMenu;
+window.closeActionMenu = closeActionMenu;
+window.skipThisCycle = skipThisCycle;
+window.doTomorrow = doTomorrow;
+window.doThisWeekend = doThisWeekend;
+window.swapChore = swapChore;
+window.halvePoints = halvePoints;
+window.renderIveGotTimeView = renderIveGotTimeView;
+window.addQuickTask = addQuickTask;
+window.completeQuickTask = completeQuickTask;
+window.claimQuickTaskPrompt = claimQuickTaskPrompt;
+window.renderQuickTasks = renderQuickTasks;
 
 // ==========================================
 // EDIT FAMILY MODAL (exposed globally)
