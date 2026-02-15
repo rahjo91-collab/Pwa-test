@@ -33,8 +33,6 @@ pids
 dist/
 build/
 
-# Generated version file
-version.js
 
 # Cache
 .cache/

@@ -4,10 +4,7 @@
   "description": "A Progressive Web Application",
   "main": "index.html",
   "scripts": {
-    "version:generate": "node generate-version.js",
-    "prestart": "node generate-version.js",
     "start": "npx serve -s . -l 3000",
-    "build": "node generate-version.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

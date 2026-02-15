@@ -1,6 +1,6 @@
 importScripts('./version.js');
 
-const CACHE_NAME = 'pwa-app-v' + (typeof APP_COMMIT_HEIGHT !== 'undefined' ? APP_COMMIT_HEIGHT : '0');
+const CACHE_NAME = 'pwa-app-v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '0');
 const urlsToCache = [
   './',
   './index.html',
