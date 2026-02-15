@@ -38,6 +38,10 @@
                 <span class="tab-icon">&#128106;</span>
                 <span class="tab-label">Family</span>
             </button>
+            <button class="tab-btn" data-view="dev">
+                <span class="tab-icon">&#128295;</span>
+                <span class="tab-label">Dev</span>
+            </button>
         </nav>
 
         <!-- Main Content -->
@@ -139,6 +143,136 @@
                 <div id="family-list" class="family-grid"></div>
                 <div id="family-empty" class="empty-state" style="display: none;">
                     <p>No family members yet. Add your first family member to get started!</p>
+                </div>
+            </div>
+            <!-- ===== Dev View ===== -->
+            <div id="view-dev" class="view">
+                <div class="dev-header">
+                    <h3>Developer Tools</h3>
+                    <span class="dev-badge">DEV MODE</span>
+                </div>
+
+                <div id="dev-log" class="dev-log">
+                    <div class="dev-log-header">
+                        <span>Log Output</span>
+                        <button class="btn-sm btn-secondary" onclick="devClearLog()">Clear</button>
+                    </div>
+                    <div id="dev-log-content" class="dev-log-content">Ready.</div>
+                </div>
+
+                <!-- DB Stats -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title">Database Stats</h4>
+                    <div id="dev-stats" class="dev-stats"></div>
+                    <button class="dev-btn" onclick="devRefreshStats()">Refresh Stats</button>
+                </div>
+
+                <!-- Quick Setup -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title">Quick Setup</h4>
+                    <p class="dev-desc">Seed sample data to quickly populate the app for testing.</p>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-blue" onclick="devSeedFamily()">Seed Sample Family (4 members)</button>
+                        <button class="dev-btn dev-btn-blue" onclick="devSeedChores()">Seed Sample Chores (~15 chores)</button>
+                        <button class="dev-btn dev-btn-blue" onclick="devSeedAll()">Seed Everything (Family + Chores)</button>
+                    </div>
+                </div>
+
+                <!-- Bulk Chore Generation -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title">Bulk Chore Generator</h4>
+                    <p class="dev-desc">Quickly generate lots of chores with random settings to stress-test the UI.</p>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-green" onclick="devAddRandomChores(5)">+ 5 Random Chores</button>
+                        <button class="dev-btn dev-btn-green" onclick="devAddRandomChores(15)">+ 15 Random Chores</button>
+                        <button class="dev-btn dev-btn-green" onclick="devAddRandomChores(50)">+ 50 Random Chores</button>
+                    </div>
+                    <div class="dev-btn-grid" style="margin-top:8px;">
+                        <button class="dev-btn dev-btn-green" onclick="devAddOverdueChores(5)">+ 5 Overdue Chores</button>
+                        <button class="dev-btn dev-btn-green" onclick="devAddTodayChores(5)">+ 5 Due-Today Chores</button>
+                        <button class="dev-btn dev-btn-green" onclick="devAddGracePeriodChores(5)">+ 5 In-Grace-Period</button>
+                    </div>
+                </div>
+
+                <!-- Simulate Activity -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title">Simulate Activity</h4>
+                    <p class="dev-desc">Create fake completion history and test the leaderboard/stats.</p>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-purple" onclick="devSimulateCompletions(10)">Simulate 10 Completions</button>
+                        <button class="dev-btn dev-btn-purple" onclick="devSimulateCompletions(50)">Simulate 50 Completions</button>
+                        <button class="dev-btn dev-btn-purple" onclick="devCompleteAllToday()">Complete All Due Today</button>
+                        <button class="dev-btn dev-btn-purple" onclick="devPostponeAllToday()">Postpone All Due Today</button>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title">Notifications</h4>
+                    <p class="dev-desc">Test notifications. You must grant permission first.</p>
+                    <div id="dev-notif-status" class="dev-notif-status"></div>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-orange" onclick="devRequestNotifPermission()">Request Permission</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireBasicNotif()">Fire Basic Notification</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireChoreReminder()">Fire Chore Reminder</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireOverdueAlert()">Fire Overdue Alert</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireSWNotif()">Fire via Service Worker</button>
+                    </div>
+                    <!-- Custom notification -->
+                    <div class="dev-custom-notif">
+                        <h5>Custom Notification</h5>
+                        <div class="form-group">
+                            <input type="text" id="dev-notif-title" placeholder="Title" value="Family Dashboard">
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="dev-notif-body" placeholder="Body" value="Time to do your chores!">
+                        </div>
+                        <div class="form-group">
+                            <select id="dev-notif-tag">
+                                <option value="test">Tag: test</option>
+                                <option value="chore-reminder">Tag: chore-reminder</option>
+                                <option value="overdue-alert">Tag: overdue-alert</option>
+                                <option value="weekly-summary">Tag: weekly-summary</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="dev-notif-require-interaction">
+                                    <span>Require Interaction</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="dev-notif-vibrate" checked>
+                                    <span>Vibrate</span>
+                                </label>
+                            </div>
+                        </div>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireCustomNotif()">Fire Custom Notification</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireCustomViaSW()">Fire Custom via SW</button>
+                    </div>
+
+                    <!-- Notification burst -->
+                    <div class="dev-btn-grid" style="margin-top: 12px;">
+                        <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(3)">Fire 3 Rapid Notifications</button>
+                        <button class="dev-btn dev-btn-orange" onclick="devFireNotifBurst(10)">Fire 10 Rapid Notifications</button>
+                    </div>
+                </div>
+
+                <!-- Data Management -->
+                <div class="dev-section">
+                    <h4 class="dev-section-title dev-section-title-danger">Data Management</h4>
+                    <p class="dev-desc">Clear data from the database. These actions cannot be undone.</p>
+                    <div class="dev-btn-grid">
+                        <button class="dev-btn dev-btn-red" onclick="devClearChores()">Clear All Chores</button>
+                        <button class="dev-btn dev-btn-red" onclick="devClearCompletions()">Clear All Completions</button>
+                        <button class="dev-btn dev-btn-red" onclick="devClearFamily()">Clear All Family Members</button>
+                        <button class="dev-btn dev-btn-red" onclick="devNuclearReset()">Nuclear Reset (Everything)</button>
+                    </div>
+                    <div class="dev-btn-grid" style="margin-top:8px;">
+                        <button class="dev-btn" onclick="devExportJSON()">Export All Data as JSON</button>
+                    </div>
                 </div>
             </div>
         </main>

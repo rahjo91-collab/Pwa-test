@@ -1045,6 +1045,233 @@ button:disabled {
 }
 
 /* ==========================================
+   Dev Tab
+   ========================================== */
+.dev-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.dev-header h3 {
+    font-size: 1.2rem;
+}
+
+.dev-badge {
+    background: #1a1a2e;
+    color: #0f0;
+    padding: 3px 10px;
+    border-radius: var(--radius-xs);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-family: 'Courier New', monospace;
+}
+
+.dev-section {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.dev-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.dev-section-title-danger {
+    color: var(--danger);
+}
+
+.dev-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.dev-btn-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dev-btn {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    font-family: inherit;
+}
+
+.dev-btn:hover {
+    transform: translateY(-1px);
+}
+
+.dev-btn:active {
+    transform: translateY(0);
+}
+
+.dev-btn-blue {
+    background: #e3f2fd;
+    border-color: #90caf9;
+    color: #1565c0;
+}
+
+.dev-btn-blue:hover { background: #bbdefb; }
+
+.dev-btn-green {
+    background: #e8f5e9;
+    border-color: #a5d6a7;
+    color: #2e7d32;
+}
+
+.dev-btn-green:hover { background: #c8e6c9; }
+
+.dev-btn-purple {
+    background: #f3e5f5;
+    border-color: #ce93d8;
+    color: #7b1fa2;
+}
+
+.dev-btn-purple:hover { background: #e1bee7; }
+
+.dev-btn-orange {
+    background: #fff3e0;
+    border-color: #ffcc80;
+    color: #e65100;
+}
+
+.dev-btn-orange:hover { background: #ffe0b2; }
+
+.dev-btn-red {
+    background: #ffebee;
+    border-color: #ef9a9a;
+    color: #c62828;
+}
+
+.dev-btn-red:hover { background: #ffcdd2; }
+
+.dev-log {
+    background: #1a1a2e;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.dev-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #2a2a3e;
+    color: #aaa;
+    font-size: 0.75rem;
+    font-family: 'Courier New', monospace;
+}
+
+.dev-log-header .btn-sm {
+    padding: 2px 8px;
+    font-size: 0.7rem;
+}
+
+.dev-log-content {
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: #0f0;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.dev-log-content .log-info { color: #4fc3f7; }
+.dev-log-content .log-success { color: #66bb6a; }
+.dev-log-content .log-warn { color: #ffa726; }
+.dev-log-content .log-error { color: #ef5350; }
+
+.dev-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.dev-stat-card {
+    background: var(--bg);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.dev-stat-number {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.dev-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.dev-notif-status {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.dev-notif-granted {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.dev-notif-denied {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.dev-notif-default {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.dev-custom-notif {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.dev-custom-notif h5 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+.dev-custom-notif .form-group {
+    margin-bottom: 8px;
+}
+
+.dev-custom-notif input,
+.dev-custom-notif select {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+/* ==========================================
    Footer
    ========================================== */
 footer {
