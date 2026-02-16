@@ -422,7 +422,7 @@ async function completeChore(choreId, memberId, notes) {
     wasPostponed: wasPostponed,
     postponeCount: chore.currentPostponeStreak,
     notes: notes || '',
-    pointsAwarded: calculatePoints(chore, wasOnTime && !wasInGrace)
+    pointsAwarded: 0
   };
   await dbAdd('completions', completion);
 
@@ -463,26 +463,8 @@ async function completeChore(choreId, memberId, notes) {
   renderCurrentView();
 }
 
-function calculatePoints(chore, wasOnTime) {
-  let points = chore.points || 0;
 
-  // "Quick Job" half points mode
-  if (chore._halfPoints) {
-    points = Math.round(points / 2);
-    delete chore._halfPoints;
-    return points;
-  }
 
-  if (chore.bonusEarly && wasOnTime) {
-    points = Math.round(points * 1.5);
-  }
-
-  if (chore.streakBonus && wasOnTime) {
-    points += (chore.currentStreak || 0);
-  }
-
-  return points;
-}
 
 async function postponeChore(choreId) {
   const chore = chores.find(c => c.id === choreId);
@@ -615,14 +597,8 @@ async function swapChore(choreId) {
   closeActionMenu();
 }
 
-async function halvePoints(choreId) {
-  // "Do it quick" - marks as lower effort, halves points, but logs completion
-  const chore = chores.find(c => c.id === choreId);
-  if (!chore) return;
-  chore._halfPoints = true;
-  openCompleteModal(choreId);
-  closeActionMenu();
-}
+
+
 
 // --- Action Menu ---
 
@@ -662,8 +638,6 @@ function openActionMenu(choreId, event) {
     if (familyMembers.length > 1) {
       items += '<div class="action-menu-item" onclick="swapChore(' + choreId + ')">Swap To Someone Else</div>';
     }
-
-    items += '<div class="action-menu-item" onclick="halvePoints(' + choreId + ')">Quick Job (Half Points)</div>';
 
     items += '<div class="action-menu-divider"></div>';
     items += '<div class="action-menu-item" onclick="togglePauseChore(' + choreId + '); closeActionMenu();">Pause Chore</div>';
@@ -707,7 +681,7 @@ function showWhileYoureAtIt(completedChore) {
         '<span class="wyai-chore-meta">' + catLabel +
           (status === 'due-today' ? ' &bull; Due today' : '') +
           (status === 'overdue' ? ' &bull; Overdue' : '') +
-          ' &bull; ' + (c.points || 0) + ' pts</span>' +
+        '</span>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -793,7 +767,6 @@ function renderIveGotTimeView(effortLevel) {
         '</span>' +
       '</div>' +
       '<div class="igt-suggestion-right">' +
-        '<span class="igt-suggestion-points">' + (s.chore.points || 0) + ' pts</span>' +
         '<button class="chore-action-btn btn-complete" onclick="event.stopPropagation(); openCompleteModal(' + s.chore.id + ')">Do It</button>' +
       '</div>' +
     '</div>'
@@ -828,13 +801,13 @@ function getDailyBonusChallenge() {
   // Deterministic based on day so everyone sees the same challenge
   const dayNum = Math.floor(today().getTime() / 86400000);
   const challenges = [
-    { title: 'Speed Clean', desc: 'Complete 3 chores in under 30 minutes', bonusPoints: 20, target: 3 },
-    { title: 'Deep Clean One Room', desc: 'Pick any room and do ALL chores for it', bonusPoints: 30, target: 0 },
-    { title: 'Overdue Blitz', desc: 'Clear all overdue chores today', bonusPoints: 25, target: 0 },
-    { title: 'Helping Hand', desc: 'Complete 2 chores assigned to someone else', bonusPoints: 20, target: 2 },
-    { title: 'Streak Builder', desc: 'Complete 3 chores that have an active streak', bonusPoints: 15, target: 3 },
-    { title: 'Quick Win Spree', desc: 'Do 5 quick-effort chores', bonusPoints: 20, target: 5 },
-    { title: 'Points Hunter', desc: 'Earn 50+ points today', bonusPoints: 15, target: 50 }
+    { title: 'Speed Clean', desc: 'Complete 3 chores in under 30 minutes', target: 3 },
+    { title: 'Deep Clean One Room', desc: 'Pick any room and do ALL chores for it', target: 0 },
+    { title: 'Overdue Blitz', desc: 'Clear all overdue chores today', target: 0 },
+    { title: 'Helping Hand', desc: 'Complete 2 chores assigned to someone else', target: 2 },
+    { title: 'Streak Builder', desc: 'Complete 3 chores that have an active streak', target: 3 },
+    { title: 'Quick Win Spree', desc: 'Do 5 quick-effort chores', target: 5 },
+    { title: 'Category Sweep', desc: 'Complete 3 chores from the same category', target: 3 }
   ];
   return challenges[dayNum % challenges.length];
 }
@@ -866,9 +839,15 @@ function getBonusChallengeProgress(challenge) {
       const overdueLeft = chores.filter(c => getChoreStatus(c) === 'overdue').length;
       return { current: overdueLeft === 0 ? 1 : 0, target: 1 };
     }
-    case 'Points Hunter': {
-      const totalPts = todayCompletions.reduce((sum, c) => sum + (c.pointsAwarded || 0), 0);
-      return { current: totalPts, target: challenge.target };
+    case 'Category Sweep': {
+      // Find the category with the most completions today
+      const catCounts = {};
+      todayCompletions.forEach(tc => {
+        const ch = chores.find(c => c.id === tc.choreId);
+        if (ch) catCounts[ch.category] = (catCounts[ch.category] || 0) + 1;
+      });
+      const maxCat = Math.max(0, ...Object.values(catCounts));
+      return { current: maxCat, target: challenge.target };
     }
     case 'Deep Clean One Room':
       return { current: todayCompletions.length, target: Math.max(1, todayCompletions.length) };
@@ -982,12 +961,6 @@ async function deleteFamilyMember(id) {
   await loadAllData();
   renderCurrentView();
   populateMemberDropdowns();
-}
-
-function getMemberPoints(memberId, sinceDate) {
-  return completions
-    .filter(c => c.completedBy === memberId && (!sinceDate || new Date(c.completedAt) >= sinceDate))
-    .reduce((sum, c) => sum + (c.pointsAwarded || 0), 0);
 }
 
 function getMemberCompletionCount(memberId, sinceDate) {
@@ -1106,7 +1079,6 @@ function renderDashboard() {
       <div class="bonus-challenge-inner ${challengeDone ? 'bonus-done' : ''}">
         <div class="bonus-challenge-top">
           <span class="bonus-title">${escapeHtml(challenge.title)}</span>
-          <span class="bonus-points">+${challenge.bonusPoints} pts</span>
         </div>
         <p class="bonus-desc">${escapeHtml(challenge.desc)}</p>
         ${challenge.target > 0 ? `<div class="bonus-progress">
@@ -1141,10 +1113,9 @@ function renderLeaderboard() {
   const weekStart = getStartOfWeek();
 
   const memberStats = familyMembers.map(member => {
-    const points = getMemberPoints(member.id, weekStart);
     const count = getMemberCompletionCount(member.id, weekStart);
-    return { member, points, count };
-  }).sort((a, b) => b.points - a.points);
+    return { member, count };
+  }).sort((a, b) => b.count - a.count);
 
   container.innerHTML = memberStats.map((stat, index) => `
     <div class="leaderboard-item">
@@ -1154,7 +1125,6 @@ function renderLeaderboard() {
         <div class="leaderboard-name">${escapeHtml(stat.member.name)}</div>
         <div class="leaderboard-stats">${stat.count} chore${stat.count !== 1 ? 's' : ''} completed this week</div>
       </div>
-      <div class="leaderboard-points">${stat.points} pts</div>
     </div>
   `).join('');
 }
@@ -1201,7 +1171,6 @@ function renderChoreCard(chore) {
         <div class="chore-card-meta">
           <span class="chore-due-status ${dueStatus.cssClass}">${dueStatus.text}</span>
           ${chore.nextDue ? `<span>${formatDate(chore.nextDue)}</span>` : ''}
-          <span class="chore-card-points">${chore.points || 0} pts</span>
           ${chore.preferredTime !== 'anytime' ? `<span>${chore.preferredTime}</span>` : ''}
           ${member ? `<span>${escapeHtml(member.name)}</span>` : '<span>Anyone</span>'}
         </div>
@@ -1303,9 +1272,8 @@ function renderFamilyView() {
   const weekStart = getStartOfWeek();
 
   container.innerHTML = familyMembers.map(member => {
-    const weekPoints = getMemberPoints(member.id, weekStart);
-    const totalPoints = getMemberPoints(member.id, null);
     const weekCount = getMemberCompletionCount(member.id, weekStart);
+    const totalCount = getMemberCompletionCount(member.id, null);
     const assignedCount = chores.filter(c => c.assignedTo === member.id && c.status === 'active').length;
 
     return `
@@ -1317,8 +1285,7 @@ function renderFamilyView() {
           <div class="family-stats">
             <span class="family-stat"><span class="family-stat-value">${assignedCount}</span> assigned</span>
             <span class="family-stat"><span class="family-stat-value">${weekCount}</span> this week</span>
-            <span class="family-stat"><span class="family-stat-value">${weekPoints}</span> pts/wk</span>
-            <span class="family-stat"><span class="family-stat-value">${totalPoints}</span> total pts</span>
+            <span class="family-stat"><span class="family-stat-value">${totalCount}</span> all time</span>
           </div>
         </div>
       </div>
@@ -1353,9 +1320,6 @@ function openChoreModal(choreId) {
     document.getElementById('chore-max-postpones').value = '3';
     document.getElementById('chore-auto-reschedule').checked = true;
     document.getElementById('chore-snooze-days').value = '1';
-    document.getElementById('chore-points').value = '10';
-    document.getElementById('chore-streak-bonus').checked = true;
-    document.getElementById('chore-bonus-early').checked = false;
     document.getElementById('chore-rotation').checked = false;
     document.getElementById('chore-priority').value = 'medium';
     document.getElementById('chore-effort').value = 'medium';
@@ -1384,9 +1348,6 @@ function populateChoreForm(chore) {
   document.getElementById('chore-auto-reschedule').checked = chore.autoReschedule !== false;
   document.getElementById('chore-snooze-days').value = chore.snoozeDays || 1;
   document.getElementById('chore-effort').value = chore.effortLevel || 'medium';
-  document.getElementById('chore-points').value = chore.points !== undefined ? chore.points : 10;
-  document.getElementById('chore-bonus-early').checked = !!chore.bonusEarly;
-  document.getElementById('chore-streak-bonus').checked = chore.streakBonus !== false;
   document.getElementById('chore-notes').value = chore.notes || '';
 
   // Weekly days
@@ -1468,9 +1429,6 @@ function getChoreFormData() {
     autoReschedule: document.getElementById('chore-auto-reschedule').checked,
     snoozeDays: parseInt(document.getElementById('chore-snooze-days').value) || 1,
     effortLevel: document.getElementById('chore-effort').value,
-    points: parseInt(document.getElementById('chore-points').value) || 0,
-    bonusEarly: document.getElementById('chore-bonus-early').checked,
-    streakBonus: document.getElementById('chore-streak-bonus').checked,
     notes: document.getElementById('chore-notes').value.trim()
   };
 
@@ -1671,16 +1629,10 @@ function openDetailModal(choreId) {
       </div>
     </div>
     <div class="detail-section">
-      <div class="detail-section-title">Effort & Points</div>
+      <div class="detail-section-title">Effort</div>
       <div class="detail-grid">
         <span class="detail-label">Effort</span>
         <span class="detail-value">${EFFORT_LABELS[chore.effortLevel] || chore.effortLevel}</span>
-        <span class="detail-label">Points</span>
-        <span class="detail-value">${chore.points || 0}</span>
-        <span class="detail-label">Early Bonus</span>
-        <span class="detail-value">${chore.bonusEarly ? 'Yes (+50%)' : 'No'}</span>
-        <span class="detail-label">Streak Bonus</span>
-        <span class="detail-value">${chore.streakBonus !== false ? 'Yes (+1/streak)' : 'No'}</span>
       </div>
     </div>
     <div class="detail-section">
@@ -1972,7 +1924,6 @@ window.skipThisCycle = skipThisCycle;
 window.doTomorrow = doTomorrow;
 window.doThisWeekend = doThisWeekend;
 window.swapChore = swapChore;
-window.halvePoints = halvePoints;
 window.renderIveGotTimeView = renderIveGotTimeView;
 window.addQuickTask = addQuickTask;
 window.completeQuickTask = completeQuickTask;
@@ -2077,21 +2028,21 @@ const SAMPLE_FAMILY = [
 ];
 
 const SAMPLE_CHORES = [
-  { title: 'Wash dishes', category: 'kitchen', frequency: 'daily', priority: 'high', effort: 'medium', points: 15, preferredTime: 'evening', slackDays: 0, desc: 'Wash all dishes and wipe down counters' },
-  { title: 'Take out bins', category: 'kitchen', frequency: 'weekly', priority: 'high', effort: 'quick', points: 10, weeklyDays: [2, 5], slackDays: 0, desc: 'All bins to the curb before 7am' },
-  { title: 'Hoover living room', category: 'living_room', frequency: 'every_x_days', priority: 'medium', effort: 'medium', points: 15, intervalDays: 3, slackDays: 1 },
-  { title: 'Clean bathroom', category: 'bathroom', frequency: 'weekly', priority: 'high', effort: 'long', points: 25, weeklyDays: [6], slackDays: 1, desc: 'Toilet, sink, shower, floor, mirror' },
-  { title: 'Do laundry', category: 'laundry', frequency: 'every_x_days', priority: 'medium', effort: 'medium', points: 15, intervalDays: 2, slackDays: 1 },
-  { title: 'Water garden plants', category: 'garden', frequency: 'every_x_days', priority: 'medium', effort: 'quick', points: 8, intervalDays: 2, slackDays: 2, preferredTime: 'morning' },
-  { title: 'Feed the cat', category: 'pets', frequency: 'daily', priority: 'critical', effort: 'quick', points: 5, slackDays: 0, preferredTime: 'morning', desc: 'Wet food in morning, dry food top-up' },
-  { title: 'Weekly food shop', category: 'shopping', frequency: 'weekly', priority: 'high', effort: 'long', points: 30, weeklyDays: [6], slackDays: 1 },
-  { title: 'Tidy bedrooms', category: 'bedroom', frequency: 'weekly', priority: 'low', effort: 'medium', points: 12, weeklyDays: [0], slackDays: 2 },
-  { title: 'Mop kitchen floor', category: 'kitchen', frequency: 'weekly', priority: 'medium', effort: 'medium', points: 15, weeklyDays: [3], slackDays: 1 },
-  { title: 'Change bed sheets', category: 'bedroom', frequency: 'biweekly', priority: 'medium', effort: 'medium', points: 20, slackDays: 3 },
-  { title: 'Clean fridge', category: 'kitchen', frequency: 'monthly', priority: 'low', effort: 'long', points: 25, monthlyDay: 1, slackDays: 5 },
-  { title: 'Mow the lawn', category: 'garden', frequency: 'biweekly', priority: 'low', effort: 'long', points: 30, slackDays: 3, preferredTime: 'afternoon' },
-  { title: 'Wipe kitchen surfaces', category: 'kitchen', frequency: 'daily', priority: 'medium', effort: 'quick', points: 5, slackDays: 0, preferredTime: 'evening' },
-  { title: 'Sort recycling', category: 'general', frequency: 'weekly', priority: 'medium', effort: 'quick', points: 8, weeklyDays: [1], slackDays: 1 }
+  { title: 'Wash dishes', category: 'kitchen', frequency: 'daily', priority: 'high', effort: 'medium', preferredTime: 'evening', slackDays: 0, desc: 'Wash all dishes and wipe down counters' },
+  { title: 'Take out bins', category: 'kitchen', frequency: 'weekly', priority: 'high', effort: 'quick', weeklyDays: [2, 5], slackDays: 0, desc: 'All bins to the curb before 7am' },
+  { title: 'Hoover living room', category: 'living_room', frequency: 'every_x_days', priority: 'medium', effort: 'medium', intervalDays: 3, slackDays: 1 },
+  { title: 'Clean bathroom', category: 'bathroom', frequency: 'weekly', priority: 'high', effort: 'long', weeklyDays: [6], slackDays: 1, desc: 'Toilet, sink, shower, floor, mirror' },
+  { title: 'Do laundry', category: 'laundry', frequency: 'every_x_days', priority: 'medium', effort: 'medium', intervalDays: 2, slackDays: 1 },
+  { title: 'Water garden plants', category: 'garden', frequency: 'every_x_days', priority: 'medium', effort: 'quick', intervalDays: 2, slackDays: 2, preferredTime: 'morning' },
+  { title: 'Feed the cat', category: 'pets', frequency: 'daily', priority: 'critical', effort: 'quick', slackDays: 0, preferredTime: 'morning', desc: 'Wet food in morning, dry food top-up' },
+  { title: 'Weekly food shop', category: 'shopping', frequency: 'weekly', priority: 'high', effort: 'long', weeklyDays: [6], slackDays: 1 },
+  { title: 'Tidy bedrooms', category: 'bedroom', frequency: 'weekly', priority: 'low', effort: 'medium', weeklyDays: [0], slackDays: 2 },
+  { title: 'Mop kitchen floor', category: 'kitchen', frequency: 'weekly', priority: 'medium', effort: 'medium', weeklyDays: [3], slackDays: 1 },
+  { title: 'Change bed sheets', category: 'bedroom', frequency: 'biweekly', priority: 'medium', effort: 'medium', slackDays: 3 },
+  { title: 'Clean fridge', category: 'kitchen', frequency: 'monthly', priority: 'low', effort: 'long', monthlyDay: 1, slackDays: 5 },
+  { title: 'Mow the lawn', category: 'garden', frequency: 'biweekly', priority: 'low', effort: 'long', slackDays: 3, preferredTime: 'afternoon' },
+  { title: 'Wipe kitchen surfaces', category: 'kitchen', frequency: 'daily', priority: 'medium', effort: 'quick', slackDays: 0, preferredTime: 'evening' },
+  { title: 'Sort recycling', category: 'general', frequency: 'weekly', priority: 'medium', effort: 'quick', weeklyDays: [1], slackDays: 1 }
 ];
 
 const RANDOM_CHORE_NAMES = [
@@ -2151,9 +2102,8 @@ window.devSeedChores = async function() {
       autoReschedule: true,
       snoozeDays: 1,
       effortLevel: sc.effort || 'medium',
-      points: sc.points || 10,
-      bonusEarly: count % 3 === 0,
-      streakBonus: true,
+
+
       notes: ''
     };
     await saveChore(choreData);
@@ -2216,9 +2166,8 @@ window.devAddRandomChores = async function(count) {
       autoReschedule: Math.random() > 0.3,
       snoozeDays: randomPick([1, 1, 1, 2, 3]),
       effortLevel: randomPick(efforts),
-      points: randomPick([5, 8, 10, 12, 15, 20, 25, 30]),
-      bonusEarly: Math.random() > 0.6,
-      streakBonus: Math.random() > 0.3,
+
+
       notes: ''
     };
     await saveChore(choreData);
@@ -2252,8 +2201,8 @@ window.devAddOverdueChores = async function(count) {
       preferredTime: 'anytime',
       slackDays: Math.max(0, daysAgo - randomInt(3, 5)),
       maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
-      effortLevel: 'medium', points: 15,
-      bonusEarly: false, streakBonus: true, notes: ''
+      effortLevel: 'medium',
+ notes: ''
     };
 
     // We need to manually set nextDue to be in the past
@@ -2295,8 +2244,8 @@ window.devAddTodayChores = async function(count) {
       startDate: toDateStr(today()),
       preferredTime: randomPick(['morning', 'afternoon', 'evening']),
       slackDays: 1, maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
-      effortLevel: randomPick(['quick', 'medium']), points: 10,
-      bonusEarly: false, streakBonus: true, notes: ''
+      effortLevel: randomPick(['quick', 'medium']),
+ notes: ''
     };
     await saveChore(choreData);
     added++;
@@ -2330,8 +2279,8 @@ window.devAddGracePeriodChores = async function(count) {
       preferredTime: 'anytime',
       slackDays: slackDays,
       maxPostpones: 3, autoReschedule: true, snoozeDays: 1,
-      effortLevel: 'medium', points: 12,
-      bonusEarly: false, streakBonus: true, notes: ''
+      effortLevel: 'medium',
+ notes: ''
     };
 
     choreData.createdAt = new Date().toISOString();
@@ -2383,7 +2332,6 @@ window.devSimulateCompletions = async function(count) {
     completedDate.setHours(randomInt(7, 21), randomInt(0, 59), 0, 0);
 
     const wasOnTime = Math.random() > 0.3;
-    const pts = calculatePoints(chore, wasOnTime);
 
     const completion = {
       choreId: chore.id,
@@ -2394,7 +2342,7 @@ window.devSimulateCompletions = async function(count) {
       wasPostponed: Math.random() > 0.7,
       postponeCount: wasOnTime ? 0 : randomInt(1, 3),
       notes: '',
-      pointsAwarded: pts
+      pointsAwarded: 0
     };
     await dbAdd('completions', completion);
     added++;
