@@ -174,6 +174,10 @@ body {
     margin-bottom: 20px;
 }
 
+.summary-cards-compact {
+    grid-template-columns: repeat(3, 1fr);
+}
+
 .summary-card {
     background: var(--card-bg);
     padding: 16px 12px;
@@ -1599,6 +1603,71 @@ button:disabled {
 .quick-task-actions {
     display: flex;
     gap: 6px;
+}
+
+/* ==========================================
+   Give Me A Job
+   ========================================== */
+.give-me-a-job-wrap {
+    text-align: center;
+    margin: 18px 0 10px;
+}
+
+.give-me-a-job-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 16px 36px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 0 4px 14px rgba(66,133,244,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.give-me-a-job-btn:active {
+    transform: scale(0.97);
+    box-shadow: 0 2px 8px rgba(66,133,244,0.25);
+}
+
+.give-job-result {
+    margin: 0 0 10px;
+}
+
+.give-job-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border-left: 4px solid var(--primary);
+    cursor: pointer;
+}
+
+.give-job-card.give-job-empty {
+    border-left-color: var(--text-muted);
+    text-align: center;
+    color: var(--text-secondary);
+    cursor: default;
+}
+
+.give-job-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.give-job-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.give-job-actions {
+    display: flex;
+    gap: 10px;
 }
 
 /* ==========================================

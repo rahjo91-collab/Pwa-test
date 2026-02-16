@@ -52,7 +52,7 @@
         <main class="main-content">
             <!-- ===== Dashboard View ===== -->
             <div id="view-dashboard" class="view active">
-                <div class="summary-cards">
+                <div class="summary-cards summary-cards-compact">
                     <div class="summary-card summary-today">
                         <div class="summary-number" id="stat-today">0</div>
                         <div class="summary-label">Due Today</div>
@@ -65,10 +65,6 @@
                         <div class="summary-number" id="stat-done-today">0</div>
                         <div class="summary-label">Done Today</div>
                     </div>
-                    <div class="summary-card summary-streak">
-                        <div class="summary-number" id="stat-streak">0</div>
-                        <div class="summary-label">Best Streak</div>
-                    </div>
                 </div>
 
                 <section class="dashboard-section" id="section-overdue" style="display:none;">
@@ -79,49 +75,13 @@
                 <section class="dashboard-section" id="section-today">
                     <h3 class="section-title">Today's Chores</h3>
                     <div id="dashboard-today" class="chore-cards"></div>
-                    <p id="today-empty" class="empty-hint" style="display:none;">Nothing due today. Enjoy your day!</p>
+                    <p id="today-empty" class="empty-hint" style="display:none;">All clear for today!</p>
                 </section>
 
-                <section class="dashboard-section" id="section-upcoming">
-                    <h3 class="section-title">Coming Up (Next 7 Days)</h3>
-                    <div id="dashboard-upcoming" class="chore-cards"></div>
-                    <p id="upcoming-empty" class="empty-hint" style="display:none;">No upcoming chores this week.</p>
-                </section>
-
-                <!-- Bonus Challenge -->
-                <section class="dashboard-section" id="section-bonus-challenge">
-                    <h3 class="section-title">Daily Bonus Challenge</h3>
-                    <div id="bonus-challenge" class="bonus-challenge-card"></div>
-                </section>
-
-                <!-- I've Got Time -->
-                <section class="dashboard-section" id="section-ive-got-time">
-                    <h3 class="section-title">I've Got Time</h3>
-                    <p class="section-desc">Got some spare time? Here's what would help most:</p>
-                    <div class="igt-filters">
-                        <button class="igt-filter-btn active" data-effort="all" onclick="renderIveGotTimeView('all')">All</button>
-                        <button class="igt-filter-btn" data-effort="quick" onclick="renderIveGotTimeView('quick')">Quick Jobs</button>
-                        <button class="igt-filter-btn" data-effort="medium" onclick="renderIveGotTimeView('medium')">Up to Medium</button>
-                    </div>
-                    <div id="ive-got-time-list" class="igt-list"></div>
-                </section>
-
-                <!-- Quick Tasks -->
-                <section class="dashboard-section" id="section-quick-tasks">
-                    <h3 class="section-title">Quick Tasks</h3>
-                    <p class="section-desc">One-off tasks anyone can grab.</p>
-                    <div class="quick-task-add">
-                        <input type="text" id="quick-task-input" placeholder="e.g. Bring parcel inside, Wipe counter..." onkeydown="if(event.key==='Enter'){addQuickTask(this.value);this.value='';renderQuickTasks();}">
-                        <button class="btn-sm btn-primary" onclick="addQuickTask(document.getElementById('quick-task-input').value);document.getElementById('quick-task-input').value='';renderQuickTasks();">Add</button>
-                    </div>
-                    <div id="quick-tasks-list"></div>
-                </section>
-
-                <section class="dashboard-section" id="section-leaderboard">
-                    <h3 class="section-title">Family Leaderboard (This Week)</h3>
-                    <div id="dashboard-leaderboard" class="leaderboard"></div>
-                    <p id="leaderboard-empty" class="empty-hint" style="display:none;">Add family members and complete chores to see the leaderboard.</p>
-                </section>
+                <div class="give-me-a-job-wrap">
+                    <button class="give-me-a-job-btn" onclick="giveJob()">Give Me A Job</button>
+                </div>
+                <div id="give-me-a-job-result" class="give-job-result" style="display:none;"></div>
             </div>
 
             <!-- ===== Chores View ===== -->

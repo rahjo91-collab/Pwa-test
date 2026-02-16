@@ -773,6 +773,44 @@ function renderIveGotTimeView(effortLevel) {
   ).join('');
 }
 
+// --- Give Me A Job ---
+
+function giveJob() {
+  const suggestions = getIveGotTimeSuggestions('all');
+  const resultEl = document.getElementById('give-me-a-job-result');
+  if (!resultEl) return;
+
+  if (suggestions.length === 0) {
+    resultEl.innerHTML = '<div class="give-job-card give-job-empty">Nothing to do right now. Enjoy your free time!</div>';
+    resultEl.style.display = '';
+    return;
+  }
+
+  // Pick from top suggestions with some randomness (weighted toward top)
+  const idx = Math.floor(Math.random() * Math.min(suggestions.length, 3));
+  const pick = suggestions[idx];
+  const c = pick.chore;
+  const statusLabel = pick.status === 'overdue' ? '<span class="due-overdue">Overdue</span>'
+    : pick.status === 'due-today' ? '<span class="due-today">Due today</span>'
+    : pick.status === 'grace-period' ? '<span class="due-grace">Grace period</span>'
+    : '<span class="due-upcoming">Upcoming</span>';
+
+  resultEl.innerHTML =
+    '<div class="give-job-card" onclick="openActionMenu(' + c.id + ', event)">' +
+      '<div class="give-job-title">' + escapeHtml(c.title) + '</div>' +
+      '<div class="give-job-meta">' +
+        statusLabel + ' &bull; ' +
+        EFFORT_LABELS[c.effort || 'medium'] + ' &bull; ' +
+        CATEGORY_LABELS[c.category || 'general'] +
+      '</div>' +
+      '<div class="give-job-actions">' +
+        '<button class="btn-primary btn-sm" onclick="event.stopPropagation(); openCompleteModal(' + c.id + ')">Do It</button>' +
+        '<button class="btn-secondary btn-sm" onclick="event.stopPropagation(); giveJob()">Something Else</button>' +
+      '</div>' +
+    '</div>';
+  resultEl.style.display = '';
+}
+
 // --- While You're At It (related chore suggestions after completing) ---
 
 function getWhileYoureAtItSuggestions(completedChore) {
@@ -1007,35 +1045,24 @@ function renderDashboard() {
   // Categorize chores
   const overdueChores = [];
   const todayChores = [];
-  const upcomingChores = [];
 
   activeChores.forEach(c => {
     const status = getChoreStatus(c);
     if (status === 'overdue') overdueChores.push(c);
     else if (status === 'due-today' || status === 'grace-period') todayChores.push(c);
-    else if (status === 'upcoming') {
-      const daysUntil = daysBetween(today(), parseDate(c.nextDue));
-      if (daysUntil <= 7) upcomingChores.push(c);
-    }
   });
 
   // Sort by priority
   const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] || 2) - (PRIORITY_ORDER[b.priority] || 2);
   overdueChores.sort(sortByPriority);
   todayChores.sort(sortByPriority);
-  upcomingChores.sort((a, b) => {
-    const dateCompare = a.nextDue.localeCompare(b.nextDue);
-    return dateCompare !== 0 ? dateCompare : sortByPriority(a, b);
-  });
 
   // Stats
   const todayCompletions = completions.filter(c => toDateStr(new Date(c.completedAt)) === todayStr);
-  const bestStreak = chores.reduce((max, c) => Math.max(max, c.bestStreak || 0), 0);
 
   document.getElementById('stat-today').textContent = todayChores.length;
   document.getElementById('stat-overdue').textContent = overdueChores.length;
   document.getElementById('stat-done-today').textContent = todayCompletions.length;
-  document.getElementById('stat-streak').textContent = bestStreak;
 
   // Render overdue
   const overdueSection = document.getElementById('section-overdue');
@@ -1058,58 +1085,23 @@ function renderDashboard() {
     todayEmpty.style.display = '';
   }
 
-  // Render upcoming
-  const upcomingContainer = document.getElementById('dashboard-upcoming');
-  const upcomingEmpty = document.getElementById('upcoming-empty');
-  if (upcomingChores.length > 0) {
-    upcomingContainer.innerHTML = upcomingChores.map(c => renderChoreCard(c)).join('');
-    upcomingEmpty.style.display = 'none';
-  } else {
-    upcomingContainer.innerHTML = '';
-    upcomingEmpty.style.display = '';
-  }
-
-  // Render bonus challenge
-  const challenge = getDailyBonusChallenge();
-  const progress = getBonusChallengeProgress(challenge);
-  const challengeDone = progress.target > 0 && progress.current >= progress.target;
-  const bonusEl = document.getElementById('bonus-challenge');
-  if (bonusEl) {
-    bonusEl.innerHTML = `
-      <div class="bonus-challenge-inner ${challengeDone ? 'bonus-done' : ''}">
-        <div class="bonus-challenge-top">
-          <span class="bonus-title">${escapeHtml(challenge.title)}</span>
-        </div>
-        <p class="bonus-desc">${escapeHtml(challenge.desc)}</p>
-        ${challenge.target > 0 ? `<div class="bonus-progress">
-          <div class="bonus-progress-bar" style="width:${Math.min(100, Math.round(progress.current / progress.target * 100))}%"></div>
-        </div>
-        <span class="bonus-progress-text">${progress.current} / ${progress.target}${challengeDone ? ' - Complete!' : ''}</span>` : ''}
-      </div>
-    `;
-  }
-
-  // Render I've Got Time
-  renderIveGotTimeView('all');
-
-  // Render Quick Tasks
-  renderQuickTasks();
-
-  // Render leaderboard
-  renderLeaderboard();
+  // Hide the give-me-a-job result when dashboard refreshes
+  const jobResult = document.getElementById('give-me-a-job-result');
+  if (jobResult) jobResult.style.display = 'none';
 }
 
 function renderLeaderboard() {
   const container = document.getElementById('dashboard-leaderboard');
   const empty = document.getElementById('leaderboard-empty');
+  if (!container) return;
 
   if (familyMembers.length === 0) {
     container.innerHTML = '';
-    empty.style.display = '';
+    if (empty) empty.style.display = '';
     return;
   }
 
-  empty.style.display = 'none';
+  if (empty) empty.style.display = 'none';
   const weekStart = getStartOfWeek();
 
   const memberStats = familyMembers.map(member => {
@@ -1925,6 +1917,7 @@ window.doTomorrow = doTomorrow;
 window.doThisWeekend = doThisWeekend;
 window.swapChore = swapChore;
 window.renderIveGotTimeView = renderIveGotTimeView;
+window.giveJob = giveJob;
 window.addQuickTask = addQuickTask;
 window.completeQuickTask = completeQuickTask;
 window.claimQuickTaskPrompt = claimQuickTaskPrompt;
