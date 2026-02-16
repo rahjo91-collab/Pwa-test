@@ -1029,6 +1029,7 @@ function renderCurrentView() {
   switch (currentView) {
     case 'dashboard': renderDashboard(); break;
     case 'chores': renderChoresList(); break;
+    case 'week': renderWeekPlanner(); break;
     case 'family': renderFamilyView(); break;
     case 'dev': renderDevView(); break;
   }
@@ -1119,6 +1120,267 @@ function renderLeaderboard() {
       </div>
     </div>
   `).join('');
+}
+
+// ==========================================
+// WEEK PLANNER
+// ==========================================
+
+const DAY_NAMES_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+let weekOffset = 0; // 0 = this week, 1 = next week, -1 = last week
+let plannerItems = [];
+let editingPlannerItem = null;
+
+function loadPlannerItems() {
+  try {
+    plannerItems = JSON.parse(localStorage.getItem('weekPlannerItems') || '[]');
+  } catch (e) {
+    plannerItems = [];
+  }
+}
+
+function savePlannerItems() {
+  localStorage.setItem('weekPlannerItems', JSON.stringify(plannerItems));
+}
+
+function getWeekDates(offset) {
+  const start = getStartOfWeek();
+  start.setDate(start.getDate() + (offset * 7));
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function getWeekLabel(offset) {
+  if (offset === 0) return 'This Week';
+  if (offset === 1) return 'Next Week';
+  if (offset === -1) return 'Last Week';
+  const dates = getWeekDates(offset);
+  const fmt = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return fmt(dates[0]) + ' - ' + fmt(dates[6]);
+}
+
+function weekNavPrev() {
+  weekOffset--;
+  renderWeekPlanner();
+}
+
+function weekNavNext() {
+  weekOffset++;
+  renderWeekPlanner();
+}
+
+// Get chores that fall on a specific date
+function getChoresForDate(date) {
+  const dateStr = toDateStr(date);
+  const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ...
+  const result = [];
+
+  chores.filter(c => c.status === 'active').forEach(c => {
+    let showOnDay = false;
+
+    if (c.frequency === 'daily') {
+      showOnDay = true;
+    } else if (c.frequency === 'weekly') {
+      showOnDay = (c.weeklyDays || []).includes(dayOfWeek);
+    } else if (c.frequency === 'biweekly') {
+      // Show if nextDue falls on this date
+      if (c.nextDue === dateStr) showOnDay = true;
+    } else if (c.frequency === 'every_x_days') {
+      if (c.nextDue === dateStr) showOnDay = true;
+    } else if (c.frequency === 'monthly') {
+      if (date.getDate() === (c.monthlyDay || 1)) showOnDay = true;
+    } else if (c.frequency === 'once') {
+      if (c.nextDue === dateStr) showOnDay = true;
+    }
+
+    if (showOnDay) {
+      result.push(c);
+    }
+  });
+
+  return result;
+}
+
+// Get planner items for a specific date
+function getPlannerItemsForDate(date) {
+  const dateStr = toDateStr(date);
+  const dayOfWeek = date.getDay();
+
+  return plannerItems.filter(item => {
+    if (item.repeat === 'once') return item.date === dateStr;
+    if (item.repeat === 'daily') return true;
+    if (item.repeat === 'weekdays') return dayOfWeek >= 1 && dayOfWeek <= 5;
+    if (item.repeat === 'weekly') return dayOfWeek === item.dayOfWeek;
+    return false;
+  });
+}
+
+// Check if a chore was completed on a given date
+function isChoreCompletedOnDate(choreId, dateStr) {
+  return completions.some(c => c.choreId === choreId && toDateStr(new Date(c.completedAt)) === dateStr);
+}
+
+function renderWeekPlanner() {
+  loadPlannerItems();
+  const dates = getWeekDates(weekOffset);
+  const container = document.getElementById('week-columns');
+  const titleEl = document.getElementById('week-title');
+  if (!container || !titleEl) return;
+
+  titleEl.textContent = getWeekLabel(weekOffset);
+  const todayStr = toDateStr(today());
+
+  let html = '';
+  // Start from Monday (index 0 is Mon since getStartOfWeek returns Monday)
+  for (let i = 0; i < 7; i++) {
+    const date = dates[i];
+    const dateStr = toDateStr(date);
+    const isToday = dateStr === todayStr;
+    const isPast = date < today();
+    const dayName = DAY_NAMES_SHORT[date.getDay()];
+    const dayNum = date.getDate();
+
+    const choreItems = getChoresForDate(date);
+    const planItems = getPlannerItemsForDate(date);
+
+    html += '<div class="week-col' + (isToday ? ' week-col-today' : '') + (isPast ? ' week-col-past' : '') + '">';
+    html += '<div class="week-col-header">';
+    html += '<span class="week-day-name">' + dayName + '</span>';
+    html += '<span class="week-day-num">' + dayNum + '</span>';
+    html += '</div>';
+    html += '<div class="week-col-items">';
+
+    // Render chores
+    choreItems.forEach(c => {
+      const done = isChoreCompletedOnDate(c.id, dateStr);
+      const member = c.assignedTo ? getMemberById(c.assignedTo) : null;
+      html += '<div class="week-item' + (done ? ' week-item-done' : '') + '" onclick="openActionMenu(' + c.id + ', event)">';
+      if (member) {
+        html += '<span class="week-item-avatar" style="background:' + member.color + '">' + member.avatar + '</span>';
+      }
+      html += '<span class="week-item-title">' + escapeHtml(c.title) + '</span>';
+      if (done) html += '<span class="week-item-check">&#10003;</span>';
+      html += '</div>';
+    });
+
+    // Render planner items
+    planItems.forEach(item => {
+      const member = item.assignedTo ? getMemberById(item.assignedTo) : null;
+      const timeStr = item.time ? '<span class="week-item-time">' + item.time + '</span>' : '';
+      html += '<div class="week-item week-item-plan' + (item.doneOnDates && item.doneOnDates.includes(dateStr) ? ' week-item-done' : '') + '">';
+      if (member) {
+        html += '<span class="week-item-avatar" style="background:' + member.color + '">' + member.avatar + '</span>';
+      }
+      html += '<div class="week-item-content">';
+      html += '<span class="week-item-title">' + escapeHtml(item.title) + '</span>';
+      html += timeStr;
+      html += '</div>';
+      html += '<div class="week-item-plan-actions">';
+      if (!(item.doneOnDates && item.doneOnDates.includes(dateStr))) {
+        html += '<button class="week-item-btn week-item-btn-done" onclick="event.stopPropagation(); markPlannerDone(' + item.id + ', \'' + dateStr + '\')">&#10003;</button>';
+      }
+      html += '<button class="week-item-btn week-item-btn-del" onclick="event.stopPropagation(); deletePlannerItem(' + item.id + ')">&#10005;</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+
+    // Add button
+    html += '<button class="week-add-btn" onclick="openPlannerModal(\'' + dateStr + '\', ' + date.getDay() + ')">+ Add</button>';
+    html += '</div>'; // week-col-items
+    html += '</div>'; // week-col
+  }
+
+  container.innerHTML = html;
+
+  // Auto-scroll to today's column on this week
+  if (weekOffset === 0) {
+    const todayCol = container.querySelector('.week-col-today');
+    if (todayCol) {
+      todayCol.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    }
+  }
+}
+
+// Planner modal
+let plannerModalDate = null;
+let plannerModalDayOfWeek = null;
+
+function openPlannerModal(dateStr, dayOfWeek) {
+  plannerModalDate = dateStr;
+  plannerModalDayOfWeek = dayOfWeek;
+  editingPlannerItem = null;
+
+  document.getElementById('planner-modal-day-label').textContent = DAY_NAMES_FULL[dayOfWeek];
+  document.getElementById('planner-item-title').value = '';
+  document.getElementById('planner-item-time').value = '';
+  document.getElementById('planner-item-repeat').value = 'once';
+
+  // Populate family member dropdown
+  const whoSelect = document.getElementById('planner-item-who');
+  whoSelect.innerHTML = '<option value="">Anyone</option>';
+  familyMembers.forEach(m => {
+    whoSelect.innerHTML += '<option value="' + m.id + '">' + m.avatar + ' ' + escapeHtml(m.name) + '</option>';
+  });
+
+  document.getElementById('planner-modal-overlay').style.display = 'flex';
+  document.getElementById('planner-item-title').focus();
+}
+
+function closePlannerModal() {
+  document.getElementById('planner-modal-overlay').style.display = 'none';
+}
+
+function savePlannerItem() {
+  const title = document.getElementById('planner-item-title').value.trim();
+  if (!title) return;
+
+  const whoVal = document.getElementById('planner-item-who').value;
+  const time = document.getElementById('planner-item-time').value;
+  const repeat = document.getElementById('planner-item-repeat').value;
+
+  const item = {
+    id: Date.now(),
+    title: title,
+    assignedTo: whoVal ? parseInt(whoVal) : null,
+    time: time || null,
+    repeat: repeat,
+    date: plannerModalDate,
+    dayOfWeek: plannerModalDayOfWeek,
+    doneOnDates: [],
+    createdAt: new Date().toISOString()
+  };
+
+  loadPlannerItems();
+  plannerItems.push(item);
+  savePlannerItems();
+  closePlannerModal();
+  renderWeekPlanner();
+}
+
+function markPlannerDone(itemId, dateStr) {
+  loadPlannerItems();
+  const item = plannerItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.doneOnDates) item.doneOnDates = [];
+  if (!item.doneOnDates.includes(dateStr)) {
+    item.doneOnDates.push(dateStr);
+  }
+  savePlannerItems();
+  renderWeekPlanner();
+}
+
+function deletePlannerItem(itemId) {
+  loadPlannerItems();
+  plannerItems = plannerItems.filter(i => i.id !== itemId);
+  savePlannerItems();
+  renderWeekPlanner();
 }
 
 // ==========================================
@@ -1922,6 +2184,13 @@ window.addQuickTask = addQuickTask;
 window.completeQuickTask = completeQuickTask;
 window.claimQuickTaskPrompt = claimQuickTaskPrompt;
 window.renderQuickTasks = renderQuickTasks;
+window.weekNavPrev = weekNavPrev;
+window.weekNavNext = weekNavNext;
+window.openPlannerModal = openPlannerModal;
+window.closePlannerModal = closePlannerModal;
+window.savePlannerItem = savePlannerItem;
+window.markPlannerDone = markPlannerDone;
+window.deletePlannerItem = deletePlannerItem;
 
 // ==========================================
 // EDIT FAMILY MODAL (exposed globally)

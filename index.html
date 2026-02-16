@@ -38,6 +38,10 @@
                 <span class="tab-icon">&#9745;</span>
                 <span class="tab-label">Chores</span>
             </button>
+            <button class="tab-btn" data-view="week">
+                <span class="tab-icon">&#128197;</span>
+                <span class="tab-label">Week</span>
+            </button>
             <button class="tab-btn" data-view="family">
                 <span class="tab-icon">&#128106;</span>
                 <span class="tab-label">Family</span>
@@ -124,6 +128,55 @@
                 <div id="chores-list" class="chore-cards"></div>
                 <div id="chores-empty" class="empty-state" style="display: none;">
                     <p>No chores match your filters. Try changing filters or add a new chore.</p>
+                </div>
+            </div>
+
+            <!-- ===== Week Planner View ===== -->
+            <div id="view-week" class="view">
+                <div class="week-header">
+                    <button class="week-nav-btn" onclick="weekNavPrev()">&larr;</button>
+                    <span class="week-title" id="week-title">This Week</span>
+                    <button class="week-nav-btn" onclick="weekNavNext()">&rarr;</button>
+                </div>
+                <div class="week-columns" id="week-columns"></div>
+            </div>
+
+            <!-- Add Planner Item Modal -->
+            <div class="modal-overlay" id="planner-modal-overlay" style="display:none;">
+                <div class="modal planner-modal">
+                    <div class="modal-header">
+                        <h3 id="planner-modal-title">Add to <span id="planner-modal-day-label"></span></h3>
+                        <button class="modal-close" onclick="closePlannerModal()">&times;</button>
+                    </div>
+                    <div class="form-group">
+                        <label>What needs doing?</label>
+                        <input type="text" id="planner-item-title" placeholder="e.g. Pick up kids, Cook dinner...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Who?</label>
+                            <select id="planner-item-who">
+                                <option value="">Anyone</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Time</label>
+                            <input type="time" id="planner-item-time">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Repeat</label>
+                        <select id="planner-item-repeat">
+                            <option value="once">Just this week</option>
+                            <option value="daily">Every day</option>
+                            <option value="weekdays">Weekdays (Mon-Fri)</option>
+                            <option value="weekly">Same day every week</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn-secondary" onclick="closePlannerModal()">Cancel</button>
+                        <button class="btn-primary" onclick="savePlannerItem()">Add</button>
+                    </div>
                 </div>
             </div>
 
